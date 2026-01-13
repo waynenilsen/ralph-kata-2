@@ -16,7 +16,7 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTodo, updateTodo } = await import('./todos');
+const { createTodo, toggleTodo, updateTodo } = await import('./todos');
 
 describe('createTodo', () => {
   const testTenantId = `tenant-${Date.now()}`;
@@ -121,6 +121,130 @@ describe('createTodo', () => {
 
     expect(result.errors?._form).toBeDefined();
     expect(result.errors?._form?.[0]).toContain('authenticated');
+  });
+});
+
+describe('toggleTodo', () => {
+  const testTenantId = `tenant-toggle-${Date.now()}`;
+  const testUserId = `user-toggle-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-toggle-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo with PENDING status
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to toggle',
+        status: 'PENDING',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('toggles todo from PENDING to COMPLETED', async () => {
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.status).toBe('COMPLETED');
+  });
+
+  test('toggles todo from COMPLETED to PENDING', async () => {
+    // First set status to COMPLETED
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { status: 'COMPLETED' },
+    });
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.status).toBe('PENDING');
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+  });
+
+  test('does not toggle todo when tenantId does not match (IDOR protection)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-toggle-other-${Date.now()}`;
+    const otherUserId = `user-toggle-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `toggle-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        status: 'PENDING',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to toggle the other tenant's todo with our session
+    const result = await toggleTodo(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was not toggled
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo?.status).toBe('PENDING');
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
   });
 });
 

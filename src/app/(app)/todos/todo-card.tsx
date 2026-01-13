@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
+import { toggleTodo } from '@/app/actions/todos';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { EditTodoForm } from './edit-todo-form';
 
 type TodoCardProps = {
@@ -17,6 +19,13 @@ type TodoCardProps = {
 
 export function TodoCard({ todo }: TodoCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const handleToggle = () => {
+    startTransition(async () => {
+      await toggleTodo(todo.id);
+    });
+  };
 
   if (isEditing) {
     return (
@@ -35,15 +44,29 @@ export function TodoCard({ todo }: TodoCardProps) {
     );
   }
 
+  const isCompleted = todo.status === 'COMPLETED';
+
   return (
-    <Card>
+    <Card className={isCompleted ? 'opacity-75' : ''}>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{todo.title}</CardTitle>
+          <div className="flex items-center gap-3">
+            <Checkbox
+              checked={isCompleted}
+              onCheckedChange={handleToggle}
+              disabled={isPending}
+              aria-label={`Mark "${todo.title}" as ${isCompleted ? 'pending' : 'completed'}`}
+            />
+            <CardTitle
+              className={`text-lg ${isCompleted ? 'line-through text-muted-foreground' : ''}`}
+            >
+              {todo.title}
+            </CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             <span
               className={`text-sm px-2 py-1 rounded ${
-                todo.status === 'COMPLETED'
+                isCompleted
                   ? 'bg-green-100 text-green-800'
                   : 'bg-yellow-100 text-yellow-800'
               }`}
@@ -62,7 +85,11 @@ export function TodoCard({ todo }: TodoCardProps) {
       </CardHeader>
       <CardContent>
         {todo.description && (
-          <p className="text-muted-foreground mb-2">{todo.description}</p>
+          <p
+            className={`mb-2 ${isCompleted ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`}
+          >
+            {todo.description}
+          </p>
         )}
         {todo.dueDate && (
           <p className="text-sm text-muted-foreground">

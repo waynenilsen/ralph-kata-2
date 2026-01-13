@@ -83,6 +83,58 @@ export async function createTodo(
   return {};
 }
 
+export type ToggleTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Toggles the status of a todo between PENDING and COMPLETED.
+ * @param todoId - The ID of the todo to toggle
+ * @returns The result of the toggle operation
+ */
+export async function toggleTodo(todoId: string): Promise<ToggleTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to toggle a todo',
+    };
+  }
+
+  // First, get the current status of the todo (only if it belongs to the tenant)
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { status: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to update it',
+    };
+  }
+
+  const newStatus = todo.status === 'PENDING' ? 'COMPLETED' : 'PENDING';
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      status: newStatus,
+    },
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
 export async function updateTodo(
   _prevState: UpdateTodoState,
   formData: FormData,
