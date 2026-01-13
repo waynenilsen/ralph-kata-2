@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { CreateTodoForm } from './create-todo-form';
 
 export default async function TodosPage() {
   const session = await getSession();
@@ -18,6 +19,8 @@ export default async function TodosPage() {
   return (
     <div className="container mx-auto py-8 px-4">
       <h1 className="text-2xl font-semibold mb-6">Todos</h1>
+
+      <CreateTodoForm />
 
       {todos.length === 0 ? (
         <Card>
