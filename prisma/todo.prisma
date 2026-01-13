@@ -12,6 +12,9 @@ model Todo {
   updatedAt   DateTime   @updatedAt
 
   @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, createdAt])
 }
 
 enum TodoStatus {
