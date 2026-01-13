@@ -1,8 +1,9 @@
 import { redirect } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { CreateTodoForm } from './create-todo-form';
+import { TodoCard } from './todo-card';
 
 export default async function TodosPage() {
   const session = await getSession();
@@ -33,34 +34,7 @@ export default async function TodosPage() {
       ) : (
         <div className="space-y-4">
           {todos.map((todo) => (
-            <Card key={todo.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{todo.title}</CardTitle>
-                  <span
-                    className={`text-sm px-2 py-1 rounded ${
-                      todo.status === 'COMPLETED'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {todo.status}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {todo.description && (
-                  <p className="text-muted-foreground mb-2">
-                    {todo.description}
-                  </p>
-                )}
-                {todo.dueDate && (
-                  <p className="text-sm text-muted-foreground">
-                    Due: {new Date(todo.dueDate).toLocaleDateString()}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <TodoCard key={todo.id} todo={todo} />
           ))}
         </div>
       )}
