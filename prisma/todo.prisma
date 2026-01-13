@@ -1,0 +1,20 @@
+model Todo {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TodoStatus @default(PENDING)
+  dueDate     DateTime?
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  tenantId    String
+  createdBy   User       @relation("CreatedTodos", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([tenantId])
+}
+
+enum TodoStatus {
+  PENDING
+  COMPLETED
+}

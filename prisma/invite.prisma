@@ -1,0 +1,11 @@
+model Invite {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
