@@ -135,6 +135,45 @@ export async function toggleTodo(todoId: string): Promise<ToggleTodoResult> {
   return { success: true };
 }
 
+export type DeleteTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Deletes a todo by ID.
+ * Uses deleteMany with tenantId filter to prevent IDOR attacks.
+ * @param todoId - The ID of the todo to delete
+ * @returns The result of the delete operation
+ */
+export async function deleteTodo(todoId: string): Promise<DeleteTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to delete a todo',
+    };
+  }
+
+  // Use deleteMany with tenantId filter to prevent IDOR attacks
+  const result = await prisma.todo.deleteMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+  });
+
+  if (result.count === 0) {
+    return {
+      error: 'Todo not found or you do not have permission to delete it',
+    };
+  }
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
 export async function updateTodo(
   _prevState: UpdateTodoState,
   formData: FormData,

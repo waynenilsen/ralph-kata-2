@@ -16,7 +16,9 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTodo, toggleTodo, updateTodo } = await import('./todos');
+const { createTodo, toggleTodo, updateTodo, deleteTodo } = await import(
+  './todos'
+);
 
 describe('createTodo', () => {
   const testTenantId = `tenant-${Date.now()}`;
@@ -405,6 +407,124 @@ describe('updateTodo', () => {
     // Verify the todo was not updated
     const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
     expect(todo?.title).toBe('Other tenant todo');
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+});
+
+describe('deleteTodo', () => {
+  const testTenantId = `tenant-delete-${Date.now()}`;
+  const testUserId = `user-delete-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-delete-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to delete',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('deletes todo when tenantId matches session', async () => {
+    const result = await deleteTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await deleteTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+
+    // Verify todo was NOT deleted
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo).not.toBeNull();
+  });
+
+  test('returns error when todo does not exist', async () => {
+    const result = await deleteTodo('non-existent-id');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+  });
+
+  test('does not delete todo when tenantId does not match (IDOR protection)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-delete-other-${Date.now()}`;
+    const otherUserId = `user-delete-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `delete-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to delete the other tenant's todo with our session
+    const result = await deleteTodo(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was NOT deleted
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo).not.toBeNull();
 
     // Cleanup
     await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });

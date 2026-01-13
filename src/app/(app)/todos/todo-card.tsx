@@ -1,7 +1,18 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { toggleTodo } from '@/app/actions/todos';
+import { deleteTodo, toggleTodo } from '@/app/actions/todos';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,6 +35,12 @@ export function TodoCard({ todo }: TodoCardProps) {
   const handleToggle = () => {
     startTransition(async () => {
       await toggleTodo(todo.id);
+    });
+  };
+
+  const handleDelete = () => {
+    startTransition(async () => {
+      await deleteTodo(todo.id);
     });
   };
 
@@ -80,6 +97,28 @@ export function TodoCard({ todo }: TodoCardProps) {
             >
               Edit
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={isPending}>
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete todo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete &quot;{todo.title}&quot;. This
+                    action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
       </CardHeader>
