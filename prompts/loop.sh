@@ -26,42 +26,45 @@ run_ralph() {
   claude -p "@promptgrams/ralph.md" \
     --dangerously-skip-permissions \
     --output-format stream-json \
-    --model claude-sonnet-4-20250514 \
-    --verbose 2>/dev/null | jq -r '
-      # Text from assistant messages
-      if .type == "message" and .role == "assistant" then
-        (.content // [])[] | select(.type == "text") | .text // empty
-
-      # Tool invocations
-      elif .type == "tool_use" then
-        if .name == "Bash" then
-          "$ \(.input.command)"
-        elif .name == "Read" then
-          "\u001b[2m📖 \(.input.file_path)\u001b[0m"
-        elif .name == "WebSearch" then
-          "\u001b[36m🔍 \(.input.query)\u001b[0m"
-        elif .name == "WebFetch" then
-          "\u001b[36m🌐 \(.input.url)\u001b[0m"
-        elif .name == "Grep" then
-          "\u001b[2m🔎 \(.input.pattern)\u001b[0m"
-        elif .name == "Glob" then
-          "\u001b[2m📁 \(.input.pattern)\u001b[0m"
-        elif .name == "Edit" then
-          "\u001b[2m✏️  \(.input.file_path)\u001b[0m"
-        elif .name == "Write" then
-          "\u001b[2m📝 \(.input.file_path)\u001b[0m"
+    --verbose | jq -r '
+      # Assistant messages - extract text and tool uses from .message.content[]
+      if .type == "assistant" then
+        (.message.content // [])[] |
+        if .type == "text" then
+          .text // empty
+        elif .type == "tool_use" then
+          if .name == "Bash" then
+            "$ \(.input.command)"
+          elif .name == "Read" then
+            "\u001b[2m📖 \(.input.file_path)\u001b[0m"
+          elif .name == "WebSearch" then
+            "\u001b[36m🔍 \(.input.query)\u001b[0m"
+          elif .name == "WebFetch" then
+            "\u001b[36m🌐 \(.input.url)\u001b[0m"
+          elif .name == "Grep" then
+            "\u001b[2m🔎 \(.input.pattern)\u001b[0m"
+          elif .name == "Glob" then
+            "\u001b[2m📁 \(.input.pattern)\u001b[0m"
+          elif .name == "Edit" then
+            "\u001b[2m✏️  \(.input.file_path)\u001b[0m"
+          elif .name == "Write" then
+            "\u001b[2m📝 \(.input.file_path)\u001b[0m"
+          else
+            empty
+          end
         else
           empty
         end
-
-      # Tool output (bash results)
-      elif .type == "tool_result" then
-        .output // empty
 
       else
         empty
       end
     '
+  # Old jq formula (for reference):
+  # if .type == "message" and .role == "assistant" then
+  #   (.content // [])[] | select(.type == "text") | .text // empty
+  # elif .type == "tool_use" then ...
+  # elif .type == "tool_result" then .output // empty
 }
 
 main() {
