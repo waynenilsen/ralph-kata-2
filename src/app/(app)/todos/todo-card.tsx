@@ -64,7 +64,7 @@ export function TodoCard({ todo }: TodoCardProps) {
   const isCompleted = todo.status === 'COMPLETED';
 
   return (
-    <Card className={isCompleted ? 'opacity-75' : ''}>
+    <Card className={isCompleted ? 'opacity-75' : ''} data-testid="todo-card">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

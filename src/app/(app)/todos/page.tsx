@@ -1,22 +1,32 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { buildPrismaQuery, parseFilters } from '@/lib/todo-filters';
 import { CreateTodoForm } from './create-todo-form';
 import { InviteForm } from './invite-form';
 import { TodoCard } from './todo-card';
+import { TodoFilters } from './todo-filters';
 
-export default async function TodosPage() {
+interface TodosPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function TodosPage({ searchParams }: TodosPageProps) {
   const session = await getSession();
 
   if (!session) {
     redirect('/login');
   }
 
+  const filters = parseFilters(await searchParams);
+  const { where, orderBy } = buildPrismaQuery(filters, session.tenantId);
+
   const [todos, user] = await Promise.all([
     prisma.todo.findMany({
-      where: { tenantId: session.tenantId },
-      orderBy: { createdAt: 'desc' },
+      where,
+      orderBy,
     }),
     prisma.user.findUnique({
       where: { id: session.userId },
@@ -33,6 +43,10 @@ export default async function TodosPage() {
       {isAdmin && <InviteForm />}
 
       <CreateTodoForm />
+
+      <Suspense fallback={null}>
+        <TodoFilters />
+      </Suspense>
 
       {todos.length === 0 ? (
         <Card>
