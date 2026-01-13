@@ -23,7 +23,7 @@ DIM='\033[2m'
 RESET='\033[0m'
 
 run_ralph() {
-  claude -p "@promptgrams/ralph.md" \
+  claude -p "@prompts/promptgrams/ralph.md" \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose | jq -r '

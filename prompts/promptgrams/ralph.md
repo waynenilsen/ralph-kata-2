@@ -1,5 +1,7 @@
 ref [what-is-a-promptgram](./what-is-a-promptgram.md)
 
+IMPORTANT: ONE TICKET PER RUN. Once you commit and push, you are DONE. EXIT immediately. NEVER attempt to take on another ticket.
+
 begin
 
 defer [cleanup](../dev/cleanup.md)
@@ -17,6 +19,8 @@ if clean
     if there is another ticket
 
     	work on the ticket ref [implement-ticket](../dev/implement-ticket.md)
+    	commit and push ref [conventional-commits](../dev/conventional-commits.md)
+    	EXIT - you are done
 
 
     if there are no tickets in the backlog
@@ -25,8 +29,11 @@ if clean
         create the ERD to go with it ref [erd](../dev/erd.md)
         create the tickets and add them to the project ref [create-tickets-from-erd](../dev/create-tickets-from-erd.md)
         commit and push ref [conventional-commits](../dev/conventional-commits.md)
+        EXIT - you are done
 
 if not clean
 use gh, check the tickets in the project, you're probably working on the current ticket, use whats already staged to figure it out, keep working on the ticket ref [implement-ticket](../dev/implement-ticket.md)
+commit and push ref [conventional-commits](../dev/conventional-commits.md)
+EXIT - you are done
 
 at end ALWAYS [cleanup](../dev/cleanup.md)
