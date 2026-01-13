@@ -1,0 +1,8 @@
+{
+  "entryPoints": ["src"],
+  "entryPointStrategy": "expand",
+  "out": "docs",
+  "exclude": ["**/*.test.ts", "**/*.e2e.ts", "**/node_modules/**", "test/**"],
+  "excludePrivate": true,
+  "skipErrorChecking": true
+}

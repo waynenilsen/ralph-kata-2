@@ -1,0 +1,15 @@
+[test]
+preload = ["./test/setup.ts"]
+
+# Always generate coverage
+coverage = true
+
+# Fail build if coverage drops below 95%
+coverageThreshold = { line = 0.95, function = 0.95, statement = 0.95 }
+
+# Output formats
+coverageReporter = ["text", "lcov"]
+coverageDir = "./coverage"
+
+# Skip test files in coverage reports
+coverageSkipTestFiles = true
