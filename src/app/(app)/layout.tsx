@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { logout } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,9 @@ export default async function AppLayout({
     <div className="min-h-screen">
       <header className="border-b">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <h1 className="font-semibold">Todo App</h1>
+          <Link href="/" className="font-semibold text-lg">
+            TeamTodo
+          </Link>
           <form action={logout}>
             <Button type="submit" variant="outline" size="sm">
               Logout
