@@ -26,7 +26,7 @@ run_ralph() {
   claude -p "@prompts/promptgrams/ralph.md" \
     --dangerously-skip-permissions \
     --output-format stream-json \
-    --verbose | jq -r '
+    --verbose | jq --unbuffered -r '
       # Assistant messages - extract text and tool uses from .message.content[]
       if .type == "assistant" then
         (.message.content // [])[] |
