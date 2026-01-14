@@ -13,7 +13,7 @@
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "test": "bun test",
-    "test:e2e": "playwright test",
+    "test:e2e": "bun x playwright test",
     "test:all": "bun test && playwright test",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
