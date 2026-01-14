@@ -3,11 +3,12 @@ import { Suspense } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { buildPrismaQuery, parseFilters } from '@/lib/todo-filters';
+import { buildPrismaQuery, PAGE_SIZE, parseFilters } from '@/lib/todo-filters';
 import { CreateTodoForm } from './create-todo-form';
 import { InviteForm } from './invite-form';
 import { TodoCard } from './todo-card';
 import { TodoFilters } from './todo-filters';
+import { TodoPagination } from './todo-pagination';
 
 interface TodosPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -21,18 +22,26 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
   }
 
   const filters = parseFilters(await searchParams);
-  const { where, orderBy } = buildPrismaQuery(filters, session.tenantId);
+  const { where, orderBy, skip, take } = buildPrismaQuery(
+    filters,
+    session.tenantId,
+  );
 
-  const [todos, user] = await Promise.all([
+  const [todos, totalCount, user] = await Promise.all([
     prisma.todo.findMany({
       where,
       orderBy,
+      skip,
+      take,
     }),
+    prisma.todo.count({ where }),
     prisma.user.findUnique({
       where: { id: session.userId },
       select: { role: true },
     }),
   ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const isAdmin = user?.role === 'ADMIN';
 
@@ -63,6 +72,14 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
           ))}
         </div>
       )}
+
+      <Suspense fallback={null}>
+        <TodoPagination
+          currentPage={filters.page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+        />
+      </Suspense>
     </div>
   );
 }

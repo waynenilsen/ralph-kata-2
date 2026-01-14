@@ -253,3 +253,174 @@ test.describe('Todos filtering', () => {
     await page2.close();
   });
 });
+
+test.describe('Todos pagination', () => {
+  test('displays pagination when more than 10 todos exist', async ({
+    page,
+  }) => {
+    const uniqueEmail = `pagination-display-${Date.now()}@example.com`;
+    await registerUser(page, uniqueEmail, 'Pagination Display Org');
+
+    // Create 12 todos to trigger pagination (PAGE_SIZE is 10)
+    for (let i = 1; i <= 12; i++) {
+      await createTodo(page, `Todo ${i}`);
+    }
+
+    // Pagination should be visible
+    await expect(page.getByText('12 todos')).toBeVisible();
+    await expect(page.getByText('Page 1 of 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
+
+    // Should show 10 todos on page 1
+    const todoCards = page.locator('[data-testid="todo-card"]');
+    await expect(todoCards).toHaveCount(10);
+  });
+
+  test('navigates between pages', async ({ page }) => {
+    const uniqueEmail = `pagination-nav-${Date.now()}@example.com`;
+    await registerUser(page, uniqueEmail, 'Pagination Nav Org');
+
+    // Create 12 todos
+    for (let i = 1; i <= 12; i++) {
+      await createTodo(page, `NavTodo ${i}`);
+    }
+
+    // Navigate to page 2
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // URL should have page param
+    await expect(page).toHaveURL(/page=2/);
+    await expect(page.getByText('Page 2 of 2')).toBeVisible();
+
+    // Page 2 should have 2 todos (12 total, 10 on page 1)
+    const todoCards = page.locator('[data-testid="todo-card"]');
+    await expect(todoCards).toHaveCount(2);
+
+    // Next button should be disabled on last page
+    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Previous' })).toBeEnabled();
+
+    // Navigate back to page 1
+    await page.getByRole('button', { name: 'Previous' }).click();
+    await expect(page).toHaveURL(/\/todos(?:\?|$)/);
+    await expect(page.getByText('Page 1 of 2')).toBeVisible();
+    await expect(todoCards).toHaveCount(10);
+  });
+
+  test('pagination works with status filter', async ({ page }) => {
+    const uniqueEmail = `pagination-filter-${Date.now()}@example.com`;
+    await registerUser(page, uniqueEmail, 'Pagination Filter Org');
+
+    // Create 15 todos
+    for (let i = 1; i <= 15; i++) {
+      await createTodo(page, `FilterTodo ${i}`);
+    }
+
+    // Mark 12 as completed (so we have 3 pending, 12 completed)
+    for (let i = 1; i <= 12; i++) {
+      await toggleTodoStatus(page, `FilterTodo ${i}`);
+    }
+
+    // Filter by completed
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: 'Completed' }).click();
+
+    // Should have 12 completed todos with pagination (10 on page 1, 2 on page 2)
+    await expect(page.getByText('12 todos')).toBeVisible();
+    await expect(page.getByText('Page 1 of 2')).toBeVisible();
+
+    // Navigate to page 2 with filter
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // URL should have both status and page params
+    await expect(page).toHaveURL(/status=completed/);
+    await expect(page).toHaveURL(/page=2/);
+    await expect(page.getByText('Page 2 of 2')).toBeVisible();
+
+    const todoCards = page.locator('[data-testid="todo-card"]');
+    await expect(todoCards).toHaveCount(2);
+  });
+
+  test('pagination works with sort option', async ({ page }) => {
+    const uniqueEmail = `pagination-sort-${Date.now()}@example.com`;
+    await registerUser(page, uniqueEmail, 'Pagination Sort Org');
+
+    // Create 12 todos
+    for (let i = 1; i <= 12; i++) {
+      await createTodo(page, `SortTodo ${i}`);
+    }
+
+    // Sort by oldest first
+    await page.getByRole('combobox').nth(1).click();
+    await page.getByRole('option', { name: 'Oldest first' }).click();
+
+    // First todo created should be first on page 1
+    const todoCards = page.locator('[data-testid="todo-card"]');
+    await expect(todoCards.first()).toContainText('SortTodo 1');
+
+    // Navigate to page 2 with sort
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    // URL should have both sort and page params
+    await expect(page).toHaveURL(/sort=created-asc/);
+    await expect(page).toHaveURL(/page=2/);
+
+    // Page 2 should have last 2 todos (SortTodo 11 and 12 in ascending order)
+    await expect(todoCards).toHaveCount(2);
+    await expect(todoCards.first()).toContainText('SortTodo 11');
+    await expect(todoCards.last()).toContainText('SortTodo 12');
+  });
+
+  test('tenant isolation works with pagination', async ({ browser }) => {
+    const tenant1Email = `pagination-tenant1-${Date.now()}@example.com`;
+    const tenant2Email = `pagination-tenant2-${Date.now()}@example.com`;
+
+    // Create tenant 1 with 12 todos
+    const page1 = await browser.newPage();
+    await registerUser(page1, tenant1Email, 'Pagination Tenant One');
+    for (let i = 1; i <= 12; i++) {
+      await createTodo(page1, `T1Todo ${i}`);
+    }
+    await expect(page1.getByText('12 todos')).toBeVisible();
+    await expect(page1.getByText('Page 1 of 2')).toBeVisible();
+    await page1.close();
+
+    // Create tenant 2 with 5 todos (no pagination)
+    const page2 = await browser.newPage();
+    await registerUser(page2, tenant2Email, 'Pagination Tenant Two');
+    for (let i = 1; i <= 5; i++) {
+      await createTodo(page2, `T2Todo ${i}`);
+    }
+
+    // Tenant 2 should only see their 5 todos, no pagination
+    const todoCards = page2.locator('[data-testid="todo-card"]');
+    await expect(todoCards).toHaveCount(5);
+    // Pagination should not be visible (less than 10 todos)
+    await expect(page2.getByText('Page 1 of')).not.toBeVisible();
+    // Should NOT see tenant 1's todos
+    await expect(page2.getByText('T1Todo')).not.toBeVisible();
+    await page2.close();
+  });
+
+  test('does not show pagination for fewer than 11 todos', async ({ page }) => {
+    const uniqueEmail = `pagination-none-${Date.now()}@example.com`;
+    await registerUser(page, uniqueEmail, 'No Pagination Org');
+
+    // Create exactly 10 todos (PAGE_SIZE)
+    for (let i = 1; i <= 10; i++) {
+      await createTodo(page, `NoPagTodo ${i}`);
+    }
+
+    // All todos should be visible
+    const todoCards = page.locator('[data-testid="todo-card"]');
+    await expect(todoCards).toHaveCount(10);
+
+    // Pagination should not be visible (totalPages = 1)
+    await expect(page.getByText('Page 1 of')).not.toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Previous' }),
+    ).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next' })).not.toBeVisible();
+  });
+});
