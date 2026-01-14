@@ -1,3 +1,4 @@
+import { Sparkles, Users, WifiOff, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
@@ -37,6 +38,60 @@ export default function Home() {
             <Button asChild size="lg">
               <Link href="/register">Get Started</Link>
             </Button>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="py-20">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                <Users className="h-6 w-6 text-zinc-900 dark:text-zinc-50" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Team Isolation
+              </h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                Each team's todos are private and secure. No cross-team
+                visibility.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                <Sparkles className="h-6 w-6 text-zinc-900 dark:text-zinc-50" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Simple by Design
+              </h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                No bloat, no complexity. Just the features you need to get
+                things done.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                <Zap className="h-6 w-6 text-zinc-900 dark:text-zinc-50" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Instant Setup
+              </h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                No configuration required. Create your team and start adding
+                tasks immediately.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                <WifiOff className="h-6 w-6 text-zinc-900 dark:text-zinc-50" />
+              </div>
+              <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Works Offline
+              </h3>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                SQLite-backed storage means no cloud dependency. Your data stays
+                local.
+              </p>
+            </div>
           </div>
         </section>
       </main>
