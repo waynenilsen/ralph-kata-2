@@ -16,6 +16,16 @@ mock.module('@/lib/session', () => ({
   createSession: mock(() => Promise.resolve({ id: 'session-1' })),
 }));
 
+// Mock nodemailer for email tests
+const mockSendMail = mock(() => Promise.resolve({ messageId: 'test-id' }));
+mock.module('nodemailer', () => ({
+  default: {
+    createTransport: () => ({
+      sendMail: mockSendMail,
+    }),
+  },
+}));
+
 // Import after mocking
 const { createInvite, acceptInvite } = await import('./invite');
 
@@ -63,6 +73,8 @@ describe('createInvite', () => {
   });
 
   test('creates invite with email, token, and 7-day expiry', async () => {
+    mockSendMail.mockClear();
+
     const formData = new FormData();
     formData.set('email', 'newinvitee@example.com');
 
@@ -86,6 +98,17 @@ describe('createInvite', () => {
       (invite?.expiresAt?.getTime() || 0) - expectedExpiry.getTime(),
     );
     expect(expiryDiff).toBeLessThan(60000); // Within 1 minute
+
+    // Verify email was sent via nodemailer
+    expect(mockSendMail).toHaveBeenCalledTimes(1);
+    const emailCall = mockSendMail.mock.calls[0][0] as {
+      to: string;
+      subject: string;
+      html: string;
+    };
+    expect(emailCall.to).toBe('newinvitee@example.com');
+    expect(emailCall.subject).toContain('invited');
+    expect(emailCall.html).toContain('Test Tenant');
   });
 
   test('returns error when user is not an ADMIN', async () => {

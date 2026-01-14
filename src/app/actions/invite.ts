@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { hashPassword } from '@/lib/auth';
+import { sendEmail } from '@/lib/email/send';
+import { InviteEmail } from '@/lib/email/templates/invite';
 import { prisma } from '@/lib/prisma';
 import { createSession, getSession } from '@/lib/session';
 
@@ -83,6 +85,12 @@ export async function createInvite(
 
   const { email } = result.data;
 
+  // Get tenant name for the email
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.tenantId },
+    select: { name: true },
+  });
+
   const token = crypto.randomUUID();
   const expiresAt = new Date(
     Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
@@ -97,8 +105,20 @@ export async function createInvite(
     },
   });
 
-  // Log invite link to console (no email service)
+  // Construct invite URL
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
   const inviteLink = `/invite/${token}`;
+  const fullInviteUrl = `${appUrl}${inviteLink}`;
+
+  // Send invite email
+  const tenantName = tenant?.name || 'a team';
+  await sendEmail({
+    to: email,
+    subject: `You've been invited to join ${tenantName}`,
+    template: InviteEmail({ inviteUrl: fullInviteUrl, tenantName }),
+  });
+
+  // Also log invite link to console for debugging
   console.log(`Invite link for ${email}: ${inviteLink}`);
 
   revalidatePath('/todos');
