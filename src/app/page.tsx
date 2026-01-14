@@ -24,11 +24,21 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main content placeholder */}
-      <main className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8">
-        <p className="text-zinc-600 dark:text-zinc-400">
-          Hero section coming soon...
-        </p>
+      {/* Hero Section */}
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <section className="py-20 text-center">
+          <h1 className="text-4xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-5xl md:text-6xl">
+            Simple task management for teams
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-600 dark:text-zinc-400 sm:text-xl">
+            No complexity. No configuration. Just tasks that get done.
+          </p>
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Button asChild size="lg">
+              <Link href="/register">Get Started</Link>
+            </Button>
+          </div>
+        </section>
       </main>
     </div>
   );
