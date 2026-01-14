@@ -14,7 +14,7 @@ if clean
 
     pull master
 
-    find the next ticket to work on in the git project assoc with .
+    find the next ticket to work on using `./get-next-ticket-from-backlog.sh 1`
 
     if there is another ticket
 
@@ -23,7 +23,7 @@ if clean
     	EXIT - you are done
 
 
-    if there are no tickets in the backlog
+    if `./get-next-ticket-from-backlog.sh 1` returns nothing
         look at the existing PRDs
         create the next sensible PRD ref [prd](../product/prd.md)
         create the ERD to go with it ref [erd](../dev/erd.md)
