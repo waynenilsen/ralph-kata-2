@@ -41,4 +41,24 @@ test.describe('Auth page navigation', () => {
       '02-login-page',
     );
   });
+
+  test('can navigate from login to forgot password', async ({ page }) => {
+    await page.goto('/login');
+    await takeScreenshot(
+      page,
+      'auth-navigation',
+      'login-to-forgot-password',
+      '01-login-page',
+    );
+
+    await page.click('text=Forgot password?');
+
+    await expect(page).toHaveURL('/forgot-password');
+    await takeScreenshot(
+      page,
+      'auth-navigation',
+      'login-to-forgot-password',
+      '02-forgot-password-page',
+    );
+  });
 });
