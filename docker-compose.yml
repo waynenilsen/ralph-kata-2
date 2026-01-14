@@ -1,0 +1,6 @@
+services:
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "44321:1025"  # SMTP
+      - "44322:8025"  # Web UI
