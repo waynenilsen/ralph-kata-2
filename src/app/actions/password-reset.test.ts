@@ -246,10 +246,13 @@ describe('resetPassword', () => {
   });
 
   test('updates password hash on success', async () => {
-    const result = await resetPassword(validToken, 'newSecurePassword123');
-
-    expect(result.success).toBe(true);
-    expect(result.error).toBeUndefined();
+    // Next.js redirect throws an error with NEXT_REDIRECT
+    try {
+      await resetPassword(validToken, 'newSecurePassword123');
+    } catch (error) {
+      // Expected redirect to /todos
+      expect((error as Error).message).toBe('NEXT_REDIRECT');
+    }
 
     const user = await prisma.user.findUnique({ where: { id: testUserId } });
     expect(user?.passwordHash).not.toBe('originalHash');
@@ -258,7 +261,13 @@ describe('resetPassword', () => {
   });
 
   test('deletes token after successful use', async () => {
-    await resetPassword(validToken, 'newSecurePassword123');
+    // Next.js redirect throws an error with NEXT_REDIRECT
+    try {
+      await resetPassword(validToken, 'newSecurePassword123');
+    } catch (error) {
+      // Expected redirect to /todos
+      expect((error as Error).message).toBe('NEXT_REDIRECT');
+    }
 
     const token = await prisma.passwordResetToken.findUnique({
       where: { token: validToken },
@@ -288,7 +297,13 @@ describe('resetPassword', () => {
     });
     expect(sessionsBefore.length).toBe(2);
 
-    await resetPassword(validToken, 'newSecurePassword123');
+    // Next.js redirect throws an error with NEXT_REDIRECT
+    try {
+      await resetPassword(validToken, 'newSecurePassword123');
+    } catch (error) {
+      // Expected redirect to /todos
+      expect((error as Error).message).toBe('NEXT_REDIRECT');
+    }
 
     const sessionsAfter = await prisma.session.findMany({
       where: { userId: testUserId },
@@ -297,7 +312,13 @@ describe('resetPassword', () => {
   });
 
   test('creates new session after successful reset', async () => {
-    await resetPassword(validToken, 'newSecurePassword123');
+    // Next.js redirect throws an error with NEXT_REDIRECT
+    try {
+      await resetPassword(validToken, 'newSecurePassword123');
+    } catch (error) {
+      // Expected redirect to /todos
+      expect((error as Error).message).toBe('NEXT_REDIRECT');
+    }
 
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
     expect(mockCreateSession).toHaveBeenCalledWith(testUserId, testTenantId);
@@ -306,8 +327,8 @@ describe('resetPassword', () => {
   test('returns error for invalid token', async () => {
     const result = await resetPassword('invalid-token', 'newSecurePassword123');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Invalid');
+    expect(result.errors?._form).toBeDefined();
+    expect(result.errors?._form?.[0]).toContain('Invalid');
   });
 
   test('returns error for expired token', async () => {
@@ -323,7 +344,7 @@ describe('resetPassword', () => {
 
     const result = await resetPassword(expiredToken, 'newSecurePassword123');
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('expired');
+    expect(result.errors?._form).toBeDefined();
+    expect(result.errors?._form?.[0]).toContain('expired');
   });
 });

@@ -1,6 +1,7 @@
 'use server';
 
 import crypto from 'node:crypto';
+import { redirect } from 'next/navigation';
 import { hashPassword } from '@/lib/auth';
 import { sendEmail } from '@/lib/email/send';
 import { PasswordResetEmail } from '@/lib/email/templates/password-reset';
@@ -87,24 +88,32 @@ export async function validateResetToken(
   return { valid: true };
 }
 
+export type ResetPasswordState = {
+  errors?: {
+    password?: string[];
+    _form?: string[];
+  };
+};
+
 /**
  * Resets the user's password and logs them in.
  * Updates password, deletes token, invalidates all sessions, creates new session.
+ * Redirects to /todos on success.
  * @param token - The reset token
  * @param newPassword - The new password to set
- * @returns Object with success property and optional error message
+ * @returns Form state with errors or redirects to /todos on success
  */
 export async function resetPassword(
   token: string,
   newPassword: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<ResetPasswordState> {
   const resetToken = await prisma.passwordResetToken.findUnique({
     where: { token },
     include: { user: true },
   });
 
   if (!resetToken || resetToken.expiresAt < new Date()) {
-    return { success: false, error: 'Invalid or expired reset link' };
+    return { errors: { _form: ['Invalid or expired reset link'] } };
   }
 
   const passwordHash = await hashPassword(newPassword);
@@ -126,5 +135,5 @@ export async function resetPassword(
   // Create new session for the user
   await createSession(resetToken.userId, resetToken.user.tenantId);
 
-  return { success: true };
+  redirect('/todos');
 }
