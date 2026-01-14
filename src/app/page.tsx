@@ -99,19 +99,17 @@ export default function Home() {
         </section>
 
         {/* Secondary CTA Section */}
-        <section className="border-t border-zinc-200 py-20 text-center dark:border-zinc-800">
-          <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
-            Ready to get organized?
+        <section className="py-16 text-center bg-zinc-100 dark:bg-zinc-900 rounded-lg">
+          <h2 className="text-2xl font-bold mb-4 text-zinc-900 dark:text-zinc-50">
+            Ready to get started?
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
-            Join teams who trust TeamTodo to keep their tasks on track. Free
-            forever, no credit card required.
+          <p className="text-zinc-600 dark:text-zinc-400 mb-6">
+            Create your free account and start organizing your team's tasks
+            today.
           </p>
-          <div className="mt-8">
-            <Button asChild size="lg">
-              <Link href="/register">Get Started</Link>
-            </Button>
-          </div>
+          <Button asChild size="lg">
+            <Link href="/register">Create Free Account</Link>
+          </Button>
         </section>
       </main>
 

@@ -97,6 +97,36 @@ test.describe('Homepage', () => {
     await takeScreenshot(page, 'homepage', 'features-section', 'features');
   });
 
+  test('secondary CTA section displays headline and button', async ({
+    page,
+  }) => {
+    await page.goto('/');
+
+    // Secondary CTA headline
+    await expect(
+      page.getByRole('heading', { name: /ready to get started\?/i, level: 2 }),
+    ).toBeVisible();
+
+    // Secondary CTA description
+    await expect(
+      page.getByText(
+        /create your free account and start organizing your team's tasks today/i,
+      ),
+    ).toBeVisible();
+
+    // Create Free Account CTA button
+    const ctaButton = page.getByRole('link', { name: /create free account/i });
+    await expect(ctaButton).toBeVisible();
+    await expect(ctaButton).toHaveAttribute('href', '/register');
+
+    await takeScreenshot(
+      page,
+      'homepage',
+      'secondary-cta-section',
+      'secondary-cta',
+    );
+  });
+
   test('footer displays navigation links', async ({ page }) => {
     await page.goto('/');
 
