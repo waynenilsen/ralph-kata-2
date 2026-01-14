@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
+import { clearAllEmails, waitForEmail } from './helpers/mailhog';
 import { takeScreenshot } from './utils/screenshot';
 
 const prisma = new PrismaClient();
@@ -258,5 +259,62 @@ test.describe('Invite flow', () => {
     );
 
     await memberContext.close();
+  });
+
+  test('invite sends email with correct content to Mailhog', async ({
+    page,
+  }) => {
+    const adminEmail = `e2e-admin-email-${Date.now()}@example.com`;
+    const inviteeEmail = `e2e-invite-email-${Date.now()}@example.com`;
+
+    // Clear all emails before test for isolation
+    await clearAllEmails();
+
+    // Register a new tenant as admin
+    await page.goto('/register');
+    await page.getByLabel(/organization name/i).fill('Email Test Org');
+    await page.getByLabel(/email/i).fill(adminEmail);
+    await page.getByLabel(/password/i).fill('securepassword123');
+    await page.getByRole('button', { name: /create account/i }).click();
+
+    await expect(page).toHaveURL('/todos');
+    await takeScreenshot(
+      page,
+      'invite',
+      'invite-email-flow',
+      '01-admin-logged-in',
+    );
+
+    // Admin creates an invite
+    await page.getByLabel(/email address/i).fill(inviteeEmail);
+    await page.getByRole('button', { name: /send invite/i }).click();
+
+    // Wait for success message
+    const successMessage = page.locator('text=Invite sent!');
+    await expect(successMessage).toBeVisible();
+    await takeScreenshot(page, 'invite', 'invite-email-flow', '02-invite-sent');
+
+    // Wait for email to arrive in Mailhog
+    const email = await waitForEmail(inviteeEmail, 10000);
+
+    // Verify email recipient matches invite email
+    const toAddress = `${email.To[0].Mailbox}@${email.To[0].Domain}`;
+    expect(toAddress).toBe(inviteeEmail);
+
+    // Verify email subject contains invite-related text
+    const subject = email.Content.Headers.Subject[0];
+    expect(subject).toContain('invite');
+
+    // Verify email body contains invite link with token (UUID format)
+    const emailBody = email.Content.Body;
+    const inviteLinkPattern = /\/invite\/[a-f0-9-]{36}/i;
+    expect(emailBody).toMatch(inviteLinkPattern);
+
+    await takeScreenshot(
+      page,
+      'invite',
+      'invite-email-flow',
+      '03-email-verified',
+    );
   });
 });

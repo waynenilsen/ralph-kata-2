@@ -13,8 +13,8 @@
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "test": "bun test",
-    "test:e2e": "PLAYWRIGHT_FORCE_TTY=0 PLAYWRIGHT_HTML_OPEN=never dotenv -- npx playwright test",
-    "test:all": "bun test && PLAYWRIGHT_FORCE_TTY=0 PLAYWRIGHT_HTML_OPEN=never dotenv -- npx playwright test",
+    "test:e2e": "CI=1 PLAYWRIGHT_FORCE_TTY=0 PLAYWRIGHT_HTML_OPEN=never dotenv -- node node_modules/.bin/playwright test",
+    "test:all": "bun test && CI=1 PLAYWRIGHT_FORCE_TTY=0 PLAYWRIGHT_HTML_OPEN=never dotenv -- node node_modules/.bin/playwright test",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"

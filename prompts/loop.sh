@@ -23,7 +23,7 @@ DIM='\033[2m'
 RESET='\033[0m'
 
 run_ralph() {
-  script -q /dev/null -c "$(dirname "$0")/inner-loop.sh" | jq --unbuffered -r '
+  script -q /dev/null -c "$(dirname "$0")/inner-loop.sh" 2>&1 | jq --unbuffered -r '
       # Assistant messages - extract text and tool uses from .message.content[]
       if .type == "assistant" then
         (.message.content // [])[] |
@@ -54,9 +54,10 @@ run_ralph() {
         end
 
       else
-        empty
+        # Surface non-JSON or unexpected output as errors
+        "\u001b[31m[RAW] \(.)\u001b[0m" | if . == "\u001b[31m[RAW] null\u001b[0m" then empty else . end
       end
-    '
+    ' 2>&1 || echo "[jq error or non-JSON output detected]"
   # Old jq formula (for reference):
   # if .type == "message" and .role == "assistant" then
   #   (.content // [])[] | select(.type == "text") | .text // empty
