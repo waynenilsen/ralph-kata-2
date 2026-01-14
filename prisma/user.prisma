@@ -1,14 +1,15 @@
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  role         Role      @default(MEMBER)
-  tenant       Tenant    @relation(fields: [tenantId], references: [id])
-  tenantId     String
-  todos        Todo[]    @relation("CreatedTodos")
-  sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  passwordHash        String
+  role                Role                 @default(MEMBER)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  tenantId            String
+  todos               Todo[]               @relation("CreatedTodos")
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([tenantId])
 }
