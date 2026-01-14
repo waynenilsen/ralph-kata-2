@@ -38,6 +38,9 @@ export default function Home() {
             <Button asChild size="lg">
               <Link href="/register">Get Started</Link>
             </Button>
+            <Button variant="outline" asChild size="lg">
+              <Link href="/login">Sign In</Link>
+            </Button>
           </div>
         </section>
 
