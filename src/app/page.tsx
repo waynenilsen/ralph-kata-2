@@ -94,7 +94,46 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* Secondary CTA Section */}
+        <section className="border-t border-zinc-200 py-20 text-center dark:border-zinc-800">
+          <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
+            Ready to get organized?
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-600 dark:text-zinc-400">
+            Join teams who trust TeamTodo to keep their tasks on track. Free
+            forever, no credit card required.
+          </p>
+          <div className="mt-8">
+            <Button asChild size="lg">
+              <Link href="/register">Get Started</Link>
+            </Button>
+          </div>
+        </section>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black">
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">TeamTodo</p>
+            <nav className="flex items-center gap-6">
+              <Link
+                href="/login"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+              >
+                Log In
+              </Link>
+              <Link
+                href="/register"
+                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+              >
+                Sign Up
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
