@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { takeScreenshot } from './utils/screenshot';
 
 async function registerUser(
   page: import('@playwright/test').Page,
@@ -51,12 +52,19 @@ test.describe('Todos list view', () => {
     await expect(
       page.getByText('No todos yet. Create your first todo to get started.'),
     ).toBeVisible();
+    await takeScreenshot(page, 'todos', 'empty-state', 'no-todos-view');
   });
 
   test('redirects to login when not authenticated', async ({ page }) => {
     await page.goto('/todos');
 
     await expect(page).toHaveURL('/login');
+    await takeScreenshot(
+      page,
+      'todos',
+      'redirect-to-login',
+      'login-redirect-page',
+    );
   });
 
   test('tenant isolation - different tenants do not see each other todos', async ({
@@ -109,6 +117,12 @@ test.describe('Todos filtering', () => {
 
     // Mark one as completed
     await toggleTodoStatus(page, 'Completed Todo');
+    await takeScreenshot(
+      page,
+      'todos',
+      'filter-pending',
+      '01-todos-created-and-one-completed',
+    );
 
     // Filter by pending
     await page.getByRole('combobox').first().click();
@@ -118,6 +132,12 @@ test.describe('Todos filtering', () => {
     await expect(page.getByText('Pending Todo 1')).toBeVisible();
     await expect(page.getByText('Pending Todo 2')).toBeVisible();
     await expect(page.getByText('Completed Todo')).not.toBeVisible();
+    await takeScreenshot(
+      page,
+      'todos',
+      'filter-pending',
+      '02-filtered-by-pending',
+    );
 
     // URL should have status param
     await expect(page).toHaveURL(/status=pending/);
@@ -144,6 +164,12 @@ test.describe('Todos filtering', () => {
     await expect(page.getByText('Completed Task 1')).toBeVisible();
     await expect(page.getByText('Completed Task 2')).toBeVisible();
     await expect(page.getByText('Pending Task')).not.toBeVisible();
+    await takeScreenshot(
+      page,
+      'todos',
+      'filter-completed',
+      'filtered-by-completed',
+    );
 
     // URL should have status param
     await expect(page).toHaveURL(/status=completed/);
@@ -169,6 +195,12 @@ test.describe('Todos filtering', () => {
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards.first()).toContainText('First Created');
     await expect(todoCards.last()).toContainText('Third Created');
+    await takeScreenshot(
+      page,
+      'todos',
+      'sort-created-ascending',
+      'sorted-oldest-first',
+    );
   });
 
   test('sorts by due date ascending (soonest first)', async ({ page }) => {
@@ -195,6 +227,12 @@ test.describe('Todos filtering', () => {
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards.first()).toContainText('Due Soon');
     await expect(todoCards.last()).toContainText('Due Later');
+    await takeScreenshot(
+      page,
+      'todos',
+      'sort-due-date-soonest',
+      'sorted-soonest-first',
+    );
   });
 
   test('sorts by due date descending (furthest first)', async ({ page }) => {
@@ -220,6 +258,12 @@ test.describe('Todos filtering', () => {
     // Due later should be first
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards.first()).toContainText('Due Later');
+    await takeScreenshot(
+      page,
+      'todos',
+      'sort-due-date-furthest',
+      'sorted-furthest-first',
+    );
   });
 
   test('tenant isolation works with filters applied', async ({ browser }) => {
@@ -275,6 +319,12 @@ test.describe('Todos pagination', () => {
     // Should show 10 todos on page 1
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards).toHaveCount(10);
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-display',
+      'page-1-with-pagination',
+    );
   });
 
   test('navigates between pages', async ({ page }) => {
@@ -285,6 +335,7 @@ test.describe('Todos pagination', () => {
     for (let i = 1; i <= 12; i++) {
       await createTodo(page, `NavTodo ${i}`);
     }
+    await takeScreenshot(page, 'todos', 'pagination-navigation', '01-page-1');
 
     // Navigate to page 2
     await page.getByRole('button', { name: 'Next' }).click();
@@ -296,6 +347,7 @@ test.describe('Todos pagination', () => {
     // Page 2 should have 2 todos (12 total, 10 on page 1)
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards).toHaveCount(2);
+    await takeScreenshot(page, 'todos', 'pagination-navigation', '02-page-2');
 
     // Next button should be disabled on last page
     await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
@@ -306,6 +358,12 @@ test.describe('Todos pagination', () => {
     await expect(page).toHaveURL(/\/todos(?:\?|$)/);
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
     await expect(todoCards).toHaveCount(10);
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-navigation',
+      '03-back-to-page-1',
+    );
   });
 
   test('pagination works with status filter', async ({ page }) => {
@@ -329,6 +387,12 @@ test.describe('Todos pagination', () => {
     // Should have 12 completed todos with pagination (10 on page 1, 2 on page 2)
     await expect(page.getByText('12 todos')).toBeVisible();
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-with-filter',
+      '01-completed-page-1',
+    );
 
     // Navigate to page 2 with filter
     await page.getByRole('button', { name: 'Next' }).click();
@@ -340,6 +404,12 @@ test.describe('Todos pagination', () => {
 
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards).toHaveCount(2);
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-with-filter',
+      '02-completed-page-2',
+    );
   });
 
   test('pagination works with sort option', async ({ page }) => {
@@ -358,6 +428,12 @@ test.describe('Todos pagination', () => {
     // First todo created should be first on page 1
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards.first()).toContainText('SortTodo 1');
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-with-sort',
+      '01-sorted-page-1',
+    );
 
     // Navigate to page 2 with sort
     await page.getByRole('button', { name: 'Next' }).click();
@@ -370,6 +446,12 @@ test.describe('Todos pagination', () => {
     await expect(todoCards).toHaveCount(2);
     await expect(todoCards.first()).toContainText('SortTodo 11');
     await expect(todoCards.last()).toContainText('SortTodo 12');
+    await takeScreenshot(
+      page,
+      'todos',
+      'pagination-with-sort',
+      '02-sorted-page-2',
+    );
   });
 
   test('tenant isolation works with pagination', async ({ browser }) => {
@@ -415,6 +497,7 @@ test.describe('Todos pagination', () => {
     // All todos should be visible
     const todoCards = page.locator('[data-testid="todo-card"]');
     await expect(todoCards).toHaveCount(10);
+    await takeScreenshot(page, 'todos', 'no-pagination', 'ten-todos-no-paging');
 
     // Pagination should not be visible (totalPages = 1)
     await expect(page.getByText('Page 1 of')).not.toBeVisible();

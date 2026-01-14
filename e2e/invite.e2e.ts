@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
+import { takeScreenshot } from './utils/screenshot';
 
 const prisma = new PrismaClient();
 
@@ -31,6 +32,12 @@ test.describe('Invite flow', () => {
     await expect(
       page.getByRole('button', { name: /send invite/i }),
     ).toBeVisible();
+    await takeScreenshot(
+      page,
+      'invite',
+      'admin-sees-invite-form',
+      'todos-page-with-invite-form',
+    );
   });
 
   test('admin can create invite and invited user can accept it', async ({
@@ -40,7 +47,9 @@ test.describe('Invite flow', () => {
     const inviteeEmail = `e2e-invitee-${Date.now()}@example.com`;
 
     // Create admin context
-    const adminContext = await browser.newContext();
+    const adminContext = await browser.newContext({
+      viewport: { width: 1366, height: 768 },
+    });
     const adminPage = await adminContext.newPage();
 
     // Register a new tenant as admin
@@ -51,6 +60,12 @@ test.describe('Invite flow', () => {
     await adminPage.getByRole('button', { name: /create account/i }).click();
 
     await expect(adminPage).toHaveURL('/todos');
+    await takeScreenshot(
+      adminPage,
+      'invite',
+      'admin-creates-invite',
+      '01-admin-logged-in',
+    );
 
     // Admin creates an invite
     await adminPage.getByLabel(/email address/i).fill(inviteeEmail);
@@ -59,6 +74,12 @@ test.describe('Invite flow', () => {
     // Wait for success message with invite link
     const successMessage = adminPage.locator('text=Invite sent!');
     await expect(successMessage).toBeVisible();
+    await takeScreenshot(
+      adminPage,
+      'invite',
+      'admin-creates-invite',
+      '02-invite-sent',
+    );
 
     // Extract the invite link from the success message
     const inviteLinkText = await successMessage.textContent();
@@ -69,13 +90,21 @@ test.describe('Invite flow', () => {
     await adminContext.close();
 
     // New user accepts the invite
-    const inviteeContext = await browser.newContext();
+    const inviteeContext = await browser.newContext({
+      viewport: { width: 1366, height: 768 },
+    });
     const inviteePage = await inviteeContext.newPage();
 
     await inviteePage.goto(`/invite/${inviteToken}`);
 
     // Should see the accept invite form
     await expect(inviteePage.getByText('Accept Invite')).toBeVisible();
+    await takeScreenshot(
+      inviteePage,
+      'invite',
+      'admin-creates-invite',
+      '03-accept-invite-form',
+    );
 
     // Set password and submit
     await inviteePage.getByLabel(/password/i).fill('inviteepassword123');
@@ -91,12 +120,24 @@ test.describe('Invite flow', () => {
     await expect(
       inviteePage.getByRole('button', { name: /logout/i }),
     ).toBeVisible();
+    await takeScreenshot(
+      inviteePage,
+      'invite',
+      'admin-creates-invite',
+      '04-invitee-logged-in',
+    );
 
     await inviteeContext.close();
   });
 
   test('shows error for invalid invite token', async ({ page }) => {
     await page.goto('/invite/invalid-token-that-does-not-exist');
+    await takeScreenshot(
+      page,
+      'invite',
+      'invalid-invite-token',
+      '01-invite-form',
+    );
 
     // Set password and try to submit
     await page.getByLabel(/password/i).fill('testpassword123');
@@ -104,6 +145,12 @@ test.describe('Invite flow', () => {
 
     // Should show error
     await expect(page.getByText(/invalid/i)).toBeVisible();
+    await takeScreenshot(
+      page,
+      'invite',
+      'invalid-invite-token',
+      '02-error-shown',
+    );
   });
 
   test('shows validation error for short password', async ({ page }) => {
@@ -141,6 +188,12 @@ test.describe('Invite flow', () => {
 
     // Should show password validation error
     await expect(page.getByText(/8/i)).toBeVisible();
+    await takeScreenshot(
+      page,
+      'invite',
+      'short-password-error',
+      'validation-error',
+    );
   });
 
   test('member user does not see invite form', async ({ browser }) => {
@@ -148,7 +201,9 @@ test.describe('Invite flow', () => {
     const memberEmail = `e2e-member-${Date.now()}@example.com`;
 
     // Admin creates tenant and invite
-    const adminContext = await browser.newContext();
+    const adminContext = await browser.newContext({
+      viewport: { width: 1366, height: 768 },
+    });
     const adminPage = await adminContext.newPage();
 
     await adminPage.goto('/register');
@@ -173,7 +228,9 @@ test.describe('Invite flow', () => {
     await adminContext.close();
 
     // Member accepts invite
-    const memberContext = await browser.newContext();
+    const memberContext = await browser.newContext({
+      viewport: { width: 1366, height: 768 },
+    });
     const memberPage = await memberContext.newPage();
 
     await memberPage.goto(`/invite/${inviteToken}`);
@@ -193,6 +250,12 @@ test.describe('Invite flow', () => {
         hasText: 'Create Todo',
       }),
     ).toBeVisible();
+    await takeScreenshot(
+      memberPage,
+      'invite',
+      'member-no-invite-form',
+      'member-todos-page',
+    );
 
     await memberContext.close();
   });

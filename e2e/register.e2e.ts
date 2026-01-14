@@ -1,8 +1,15 @@
 import { expect, test } from '@playwright/test';
+import { takeScreenshot } from './utils/screenshot';
 
 test.describe('Registration flow', () => {
   test('registers a new tenant and redirects to todos', async ({ page }) => {
     await page.goto('/register');
+    await takeScreenshot(
+      page,
+      'register',
+      'registers-new-tenant',
+      '01-registration-form',
+    );
 
     await expect(page.getByText('Create your account')).toBeVisible();
 
@@ -11,11 +18,23 @@ test.describe('Registration flow', () => {
     await page.getByLabel(/organization name/i).fill('Test Organization');
     await page.getByLabel(/email/i).fill(uniqueEmail);
     await page.getByLabel(/password/i).fill('securepassword123');
+    await takeScreenshot(
+      page,
+      'register',
+      'registers-new-tenant',
+      '02-form-filled',
+    );
 
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page).toHaveURL('/todos');
     await expect(page.getByRole('heading', { name: /todos/i })).toBeVisible();
+    await takeScreenshot(
+      page,
+      'register',
+      'registers-new-tenant',
+      '03-redirected-to-todos',
+    );
   });
 
   test('shows validation error for invalid email', async ({ page }) => {
@@ -28,6 +47,12 @@ test.describe('Registration flow', () => {
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page.getByText('Invalid email address')).toBeVisible();
+    await takeScreenshot(
+      page,
+      'register',
+      'validation-error-invalid-email',
+      'invalid-email-error',
+    );
   });
 
   test('shows validation error for short password', async ({ page }) => {
@@ -40,6 +65,12 @@ test.describe('Registration flow', () => {
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page.getByText(/at least 8 characters/i)).toBeVisible();
+    await takeScreenshot(
+      page,
+      'register',
+      'validation-error-short-password',
+      'short-password-error',
+    );
   });
 
   test('shows error for duplicate email', async ({ page }) => {
@@ -59,5 +90,11 @@ test.describe('Registration flow', () => {
     await page.getByRole('button', { name: /create account/i }).click();
 
     await expect(page.getByText(/already exists/i)).toBeVisible();
+    await takeScreenshot(
+      page,
+      'register',
+      'duplicate-email-error',
+      'duplicate-email-error',
+    );
   });
 });
