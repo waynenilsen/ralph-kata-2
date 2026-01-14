@@ -13,8 +13,8 @@
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "test": "bun test",
-    "test:e2e": "PLAYWRIGHT_HTML_OPEN=never bun x playwright test",
-    "test:all": "bun test && PLAYWRIGHT_HTML_OPEN=never playwright test",
+    "test:e2e": "PLAYWRIGHT_HTML_OPEN=never timeout 300 bun x playwright test",
+    "test:all": "bun test && PLAYWRIGHT_HTML_OPEN=never timeout 300 bun x playwright test",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"
