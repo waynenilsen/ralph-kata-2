@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useActionState } from 'react';
 import { type AcceptInviteState, acceptInvite } from '@/app/actions/invite';
@@ -24,7 +25,12 @@ export default function AcceptInvitePage() {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+    <div className="relative flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
+      <header className="absolute top-0 left-0 right-0 p-4">
+        <Link href="/" className="text-xl font-bold">
+          TeamTodo
+        </Link>
+      </header>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Accept Invite</CardTitle>

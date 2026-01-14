@@ -306,8 +306,10 @@ test.describe('Invite flow', () => {
     expect(subject).toContain('invite');
 
     // Verify email body contains invite link with token (UUID format)
-    const emailBody = email.Content.Body;
-    const inviteLinkPattern = /\/invite\/[a-f0-9-]{36}/i;
+    // Note: Email body is quoted-printable encoded with soft line breaks (=\n or =\r\n)
+    // Remove soft line breaks before checking the pattern
+    const emailBody = email.Content.Body.replace(/=\r?\n/g, '');
+    const inviteLinkPattern = /invite\/[a-f0-9-]{36}/i;
     expect(emailBody).toMatch(inviteLinkPattern);
 
     await takeScreenshot(
