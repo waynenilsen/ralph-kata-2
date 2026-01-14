@@ -31,9 +31,10 @@ async function toggleTodoStatus(
   page: import('@playwright/test').Page,
   title: string,
 ) {
+  // Use exact text match to avoid matching "FilterTodo 1" when looking for "FilterTodo 10"
   const todoCard = page
     .locator('[data-testid="todo-card"]')
-    .filter({ hasText: title });
+    .filter({ has: page.getByText(title, { exact: true }) });
   await todoCard.getByRole('checkbox').click();
 }
 
@@ -314,7 +315,9 @@ test.describe('Todos pagination', () => {
     await expect(page.getByText('12 todos')).toBeVisible();
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Previous' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: 'Next', exact: true }),
+    ).toBeEnabled();
 
     // Should show 10 todos on page 1
     const todoCards = page.locator('[data-testid="todo-card"]');
@@ -338,7 +341,7 @@ test.describe('Todos pagination', () => {
     await takeScreenshot(page, 'todos', 'pagination-navigation', '01-page-1');
 
     // Navigate to page 2
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
 
     // URL should have page param
     await expect(page).toHaveURL(/page=2/);
@@ -350,7 +353,9 @@ test.describe('Todos pagination', () => {
     await takeScreenshot(page, 'todos', 'pagination-navigation', '02-page-2');
 
     // Next button should be disabled on last page
-    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: 'Next', exact: true }),
+    ).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Previous' })).toBeEnabled();
 
     // Navigate back to page 1
@@ -370,21 +375,27 @@ test.describe('Todos pagination', () => {
     const uniqueEmail = `pagination-filter-${Date.now()}@example.com`;
     await registerUser(page, uniqueEmail, 'Pagination Filter Org');
 
-    // Create 15 todos
-    for (let i = 1; i <= 15; i++) {
-      await createTodo(page, `FilterTodo ${i}`);
-    }
-
-    // Mark 12 as completed (so we have 3 pending, 12 completed)
+    // Create 12 todos - with "Newest first", page 1 shows 12-3 (10 items)
     for (let i = 1; i <= 12; i++) {
-      await toggleTodoStatus(page, `FilterTodo ${i}`);
+      await createTodo(page, `FiltPag ${i}`);
     }
 
-    // Filter by completed
+    // Mark all visible items (12-3) as completed
+    for (let i = 12; i >= 3; i--) {
+      await toggleTodoStatus(page, `FiltPag ${i}`);
+    }
+
+    // Create 2 more todos and complete them
+    await createTodo(page, 'FiltPag 13');
+    await createTodo(page, 'FiltPag 14');
+    await toggleTodoStatus(page, 'FiltPag 14');
+    await toggleTodoStatus(page, 'FiltPag 13');
+
+    // Now we have 12 completed (3-14 except 1,2) and 2 pending (1,2)
+    // Filter by completed - should have 12 completed (10 on page 1, 2 on page 2)
     await page.getByRole('combobox').first().click();
     await page.getByRole('option', { name: 'Completed' }).click();
 
-    // Should have 12 completed todos with pagination (10 on page 1, 2 on page 2)
     await expect(page.getByText('12 todos')).toBeVisible();
     await expect(page.getByText('Page 1 of 2')).toBeVisible();
     await takeScreenshot(
@@ -395,7 +406,7 @@ test.describe('Todos pagination', () => {
     );
 
     // Navigate to page 2 with filter
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
 
     // URL should have both status and page params
     await expect(page).toHaveURL(/status=completed/);
@@ -436,7 +447,7 @@ test.describe('Todos pagination', () => {
     );
 
     // Navigate to page 2 with sort
-    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
 
     // URL should have both sort and page params
     await expect(page).toHaveURL(/sort=created-asc/);
@@ -504,6 +515,8 @@ test.describe('Todos pagination', () => {
     await expect(
       page.getByRole('button', { name: 'Previous' }),
     ).not.toBeVisible();
-    await expect(page.getByRole('button', { name: 'Next' })).not.toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Next', exact: true }),
+    ).not.toBeVisible();
   });
 });

@@ -4,25 +4,10 @@ import { defineConfig } from '@playwright/test';
  * Playwright configuration for e2e tests.
  * Uses laptop resolution (1366x768) for consistent screenshots.
  *
- * ## Known Issue: Playwright hangs with Bun in non-TTY environments
+ * Tests are run using `npx playwright test` (Node.js) rather than `bun x playwright`
+ * because Playwright hangs in non-TTY environments when run through Bun.
  *
- * When running via `bun x playwright test` in non-interactive shells (CI,
- * Claude Code, etc.), tests may hang indefinitely during initialization.
- * This is a known bun+playwright compatibility issue.
- *
- * **Root Cause**: Playwright's test runner spawns worker processes using
- * Node.js subprocess APIs. Bun's implementation of these APIs has issues
- * in certain non-TTY environments, causing the workers to never start.
- *
- * **Workarounds applied**:
- * 1. `timeout 300` wrapper in package.json prevents indefinite hangs
- * 2. `globalTimeout` config provides secondary protection
- *
- * **References**:
- * - https://github.com/oven-sh/bun/issues/8222 (hangs with config file)
- * - https://github.com/oven-sh/bun/issues/16708 (arm64 Docker hangs)
- *
- * **Alternative**: Install Node.js and run playwright directly with node.
+ * Environment variables are loaded via `dotenv-cli` before running tests.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -33,8 +18,6 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   timeout: 30000,
-  // Global timeout to prevent indefinite hangs in non-TTY environments
-  globalTimeout: 5 * 60 * 1000, // 5 minutes max for entire test run
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
