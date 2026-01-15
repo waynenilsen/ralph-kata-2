@@ -12,6 +12,7 @@ import {
   searchTodoIds,
 } from '@/lib/todo-filters';
 import { CreateTodoForm } from './create-todo-form';
+import { EmptySearchState } from './empty-search-state';
 import { InviteForm } from './invite-form';
 import { TodoCard } from './todo-card';
 import { TodoFilters } from './todo-filters';
@@ -108,7 +109,11 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
         <TodoFilters members={members} labels={labels} />
       </Suspense>
 
-      {todos.length === 0 ? (
+      {todos.length === 0 && filters.q ? (
+        <Suspense fallback={null}>
+          <EmptySearchState query={filters.q} />
+        </Suspense>
+      ) : todos.length === 0 ? (
         <Card>
           <CardContent className="py-8">
             <p className="text-center text-muted-foreground">

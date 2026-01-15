@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SearchInput } from './search-input';
 
 interface Member {
   id: string;
@@ -72,7 +73,8 @@ export function TodoFilters({ members, labels }: TodoFiltersProps) {
   }
 
   return (
-    <div className="flex gap-4 mb-6">
+    <div className="flex flex-wrap gap-4 mb-6">
+      <SearchInput />
       <Select
         value={currentStatus}
         onValueChange={(v) => updateFilter('status', v)}

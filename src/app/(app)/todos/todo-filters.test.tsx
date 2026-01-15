@@ -30,19 +30,19 @@ describe('TodoFilters', () => {
   });
 
   describe('rendering', () => {
-    test('renders all four select dropdowns', () => {
+    test('renders search input and four select dropdowns', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       expect(result).not.toBeNull();
-      // Should have a flex div with 4 Select children
+      // Should have a flex div with 5 children (SearchInput + 4 Select)
       const children = result?.props?.children;
-      expect(children).toHaveLength(4);
+      expect(children).toHaveLength(5);
     });
 
     test('renders status dropdown with correct options', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const statusSelect = result?.props?.children?.[0];
+      const statusSelect = result?.props?.children?.[1];
       const selectContent = statusSelect?.props?.children?.[1];
       const options = selectContent?.props?.children;
 
@@ -55,7 +55,7 @@ describe('TodoFilters', () => {
     test('renders assignee dropdown with static options and members', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const selectContent = assigneeSelect?.props?.children?.[1];
       const children = selectContent?.props?.children;
 
@@ -79,7 +79,7 @@ describe('TodoFilters', () => {
     test('renders label dropdown with all labels option and tenant labels', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const selectContent = labelSelect?.props?.children?.[1];
       const children = selectContent?.props?.children;
 
@@ -97,7 +97,7 @@ describe('TodoFilters', () => {
     test('renders sort dropdown with correct options', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[3];
+      const sortSelect = result?.props?.children?.[4];
       const selectContent = sortSelect?.props?.children?.[1];
       const options = selectContent?.props?.children;
 
@@ -111,7 +111,7 @@ describe('TodoFilters', () => {
     test('renders with empty members array', () => {
       const result = TodoFilters({ members: [], labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const selectContent = assigneeSelect?.props?.children?.[1];
       const children = selectContent?.props?.children;
 
@@ -126,7 +126,7 @@ describe('TodoFilters', () => {
     test('renders with empty labels array', () => {
       const result = TodoFilters({ members: testMembers, labels: [] });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const selectContent = labelSelect?.props?.children?.[1];
       const children = selectContent?.props?.children;
 
@@ -141,10 +141,10 @@ describe('TodoFilters', () => {
     test('uses default values when URL has no params', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const statusSelect = result?.props?.children?.[0];
-      const assigneeSelect = result?.props?.children?.[1];
-      const labelSelect = result?.props?.children?.[2];
-      const sortSelect = result?.props?.children?.[3];
+      const statusSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
+      const sortSelect = result?.props?.children?.[4];
 
       expect(statusSelect?.props?.value).toBe('all');
       expect(assigneeSelect?.props?.value).toBe('all');
@@ -157,7 +157,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const statusSelect = result?.props?.children?.[0];
+      const statusSelect = result?.props?.children?.[1];
       expect(statusSelect?.props?.value).toBe('pending');
     });
 
@@ -166,7 +166,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       expect(assigneeSelect?.props?.value).toBe('me');
     });
 
@@ -175,7 +175,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       expect(assigneeSelect?.props?.value).toBe('user-1');
     });
 
@@ -184,7 +184,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       expect(labelSelect?.props?.value).toBe('label-1');
     });
 
@@ -193,7 +193,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[3];
+      const sortSelect = result?.props?.children?.[4];
       expect(sortSelect?.props?.value).toBe('due-asc');
     });
   });
@@ -204,7 +204,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const statusSelect = result?.props?.children?.[0];
+      const statusSelect = result?.props?.children?.[1];
       const onValueChange = statusSelect?.props?.onValueChange;
       onValueChange('pending');
 
@@ -216,7 +216,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const statusSelect = result?.props?.children?.[0];
+      const statusSelect = result?.props?.children?.[1];
       const onValueChange = statusSelect?.props?.onValueChange;
       onValueChange('all');
 
@@ -226,7 +226,7 @@ describe('TodoFilters', () => {
     test('assignee change to me updates URL', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const onValueChange = assigneeSelect?.props?.onValueChange;
       onValueChange('me');
 
@@ -236,7 +236,7 @@ describe('TodoFilters', () => {
     test('assignee change to unassigned updates URL', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const onValueChange = assigneeSelect?.props?.onValueChange;
       onValueChange('unassigned');
 
@@ -246,7 +246,7 @@ describe('TodoFilters', () => {
     test('assignee change to specific user id updates URL', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const onValueChange = assigneeSelect?.props?.onValueChange;
       onValueChange('user-1');
 
@@ -258,7 +258,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
+      const assigneeSelect = result?.props?.children?.[2];
       const onValueChange = assigneeSelect?.props?.onValueChange;
       onValueChange('all');
 
@@ -270,7 +270,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const onValueChange = labelSelect?.props?.onValueChange;
       onValueChange('label-1');
 
@@ -282,7 +282,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const onValueChange = labelSelect?.props?.onValueChange;
       onValueChange('all');
 
@@ -292,7 +292,7 @@ describe('TodoFilters', () => {
     test('sort change to due-asc updates URL', () => {
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[3];
+      const sortSelect = result?.props?.children?.[4];
       const onValueChange = sortSelect?.props?.onValueChange;
       onValueChange('due-asc');
 
@@ -304,7 +304,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[3];
+      const sortSelect = result?.props?.children?.[4];
       const onValueChange = sortSelect?.props?.onValueChange;
       onValueChange('created-desc');
 
@@ -316,7 +316,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const onValueChange = labelSelect?.props?.onValueChange;
       onValueChange('label-1');
 
@@ -332,7 +332,7 @@ describe('TodoFilters', () => {
 
       const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const labelSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[3];
       const onValueChange = labelSelect?.props?.onValueChange;
       onValueChange('all');
 
