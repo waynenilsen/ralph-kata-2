@@ -17,6 +17,7 @@ model Todo {
   comments                Comment[]
   labels                  TodoLabel[]
   subtasks                Subtask[]
+  notifications           Notification[]
   recurrenceType          RecurrenceType @default(NONE)
 
   @@index([tenantId])

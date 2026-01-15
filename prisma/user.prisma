@@ -10,6 +10,7 @@ model User {
   sessions            Session[]
   passwordResetTokens   PasswordResetToken[]
   comments              Comment[]
+  notifications         Notification[]
   emailRemindersEnabled Boolean              @default(true)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt

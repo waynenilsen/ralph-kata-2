@@ -1,0 +1,19 @@
+model Notification {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      NotificationType
+  message   String
+  todo      Todo?            @relation(fields: [todoId], references: [id], onDelete: SetNull)
+  todoId    String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  TODO_ASSIGNED
+  TODO_COMMENTED
+}
