@@ -24,12 +24,16 @@ fi
 echo "Pulling main branch..."
 git pull origin main
 
-# Check if migration is needed and create one if so
+# Apply any pending migrations first
+echo "Applying any pending migrations..."
+DATABASE_URL="file:${DB_PATH}" bun x prisma migrate deploy
+
+# Check if new migration is needed (schema.prisma differs from migration files)
 echo "Checking for schema changes..."
-if ! DATABASE_URL="file:${DB_PATH}" bun x prisma migrate diff --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma --exit-code > /dev/null 2>&1; then
+if ! bun x prisma migrate diff --from-migrations ./prisma/migrations --to-schema-datamodel ./prisma/schema.prisma --exit-code > /dev/null 2>&1; then
     echo "Schema changes detected, creating migration..."
     MIGRATION_NAME="auto_migration_$(date +%Y%m%d_%H%M%S)"
-    DATABASE_URL="file:${DB_PATH}" bun x prisma migrate dev --name "$MIGRATION_NAME" --skip-seed
+    DATABASE_URL="file:${DB_PATH}" bun x prisma migrate dev --name "$MIGRATION_NAME" --skip-seed --skip-generate
 
     # Commit and push the new migration
     echo "Committing migration..."
@@ -39,10 +43,7 @@ if ! DATABASE_URL="file:${DB_PATH}" bun x prisma migrate diff --from-migrations 
     echo "Pushing to remote..."
     git push origin main
 else
-    echo "No schema changes detected, skipping migration."
-    # Still run migrate deploy to apply any pending migrations
-    echo "Applying any pending migrations..."
-    DATABASE_URL="file:${DB_PATH}" bun x prisma migrate deploy
+    echo "No schema changes detected."
 fi
 
 # Rebuild production
