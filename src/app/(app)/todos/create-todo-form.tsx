@@ -1,5 +1,6 @@
 'use client';
 
+import type { RecurrenceType } from '@prisma/client';
 import { useActionState, useState } from 'react';
 import { type CreateTodoState, createTodo } from '@/app/actions/todos';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { LabelSelector } from './label-selector';
+import { RecurrenceSelect } from './recurrence-select';
 
 type CreateTodoFormProps = {
   members: { id: string; email: string }[];
@@ -28,6 +30,8 @@ export function CreateTodoForm({ members, labels }: CreateTodoFormProps) {
   const [state, formAction, pending] = useActionState(createTodo, initialState);
   const [assigneeId, setAssigneeId] = useState(UNASSIGNED_VALUE);
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState('');
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('NONE');
 
   // Convert the UI value to the actual form value (empty string for unassigned)
   const actualAssigneeId = assigneeId === UNASSIGNED_VALUE ? '' : assigneeId;
@@ -80,12 +84,27 @@ export function CreateTodoForm({ members, labels }: CreateTodoFormProps) {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="dueDate">Due Date (optional)</Label>
-            <Input
-              id="dueDate"
-              name="dueDate"
-              type="date"
-              aria-invalid={!!state.errors?.dueDate}
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="dueDate"
+                name="dueDate"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                aria-invalid={!!state.errors?.dueDate}
+              />
+              <input
+                type="hidden"
+                name="recurrenceType"
+                value={recurrenceType}
+              />
+              <RecurrenceSelect
+                value={recurrenceType}
+                onChange={setRecurrenceType}
+                disabled={!dueDate}
+                showHelperText
+              />
+            </div>
             {state.errors?.dueDate && (
               <p className="text-sm text-destructive">
                 {state.errors.dueDate.join(', ')}

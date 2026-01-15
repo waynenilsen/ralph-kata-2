@@ -1,5 +1,6 @@
 'use client';
 
+import type { RecurrenceType } from '@prisma/client';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { updateTodoLabels } from '@/app/actions/labels';
 import { type UpdateTodoState, updateTodo } from '@/app/actions/todos';
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { CommentSection } from './comment-section';
 import { LabelSelector } from './label-selector';
+import { RecurrenceSelect } from './recurrence-select';
 import { SubtaskSection } from './subtask-section';
 
 type EditTodoFormProps = {
@@ -24,6 +26,7 @@ type EditTodoFormProps = {
     description: string | null;
     dueDate: Date | null;
     assigneeId: string | null;
+    recurrenceType: RecurrenceType;
     comments: {
       id: string;
       content: string;
@@ -68,6 +71,12 @@ export function EditTodoForm({
   );
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>(
     todo.labels.map((tl) => tl.label.id),
+  );
+  const [dueDate, setDueDate] = useState(
+    todo.dueDate ? todo.dueDate.toISOString().slice(0, 10) : '',
+  );
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(
+    todo.recurrenceType,
   );
 
   // Convert the UI value to the actual form value (empty string for unassigned)
@@ -136,15 +145,23 @@ export function EditTodoForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor={`dueDate-${todo.id}`}>Due Date (optional)</Label>
-          <Input
-            id={`dueDate-${todo.id}`}
-            name="dueDate"
-            type="date"
-            defaultValue={
-              todo.dueDate ? todo.dueDate.toISOString().slice(0, 10) : ''
-            }
-            aria-invalid={!!state.errors?.dueDate}
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              id={`dueDate-${todo.id}`}
+              name="dueDate"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              aria-invalid={!!state.errors?.dueDate}
+            />
+            <RecurrenceSelect
+              value={recurrenceType}
+              onChange={setRecurrenceType}
+              todoId={todo.id}
+              disabled={!dueDate || pending}
+              showHelperText
+            />
+          </div>
           {state.errors?.dueDate && (
             <p className="text-sm text-destructive">
               {state.errors.dueDate.join(', ')}

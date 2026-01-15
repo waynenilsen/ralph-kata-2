@@ -1,5 +1,6 @@
 'use client';
 
+import type { RecurrenceType } from '@prisma/client';
 import { CheckSquare, MessageSquare } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { deleteTodo, toggleTodo } from '@/app/actions/todos';
@@ -29,6 +30,7 @@ type TodoCardProps = {
     dueDate: Date | null;
     assigneeId: string | null;
     assignee: { email: string } | null;
+    recurrenceType: RecurrenceType;
     _count: { comments: number };
     comments: {
       id: string;

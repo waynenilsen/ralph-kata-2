@@ -7,12 +7,22 @@ import { prisma } from '@/lib/prisma';
 import { generateNextRecurringTodo } from '@/lib/recurrence';
 import { getSession } from '@/lib/session';
 
+const recurrenceTypeEnum = z.enum([
+  'NONE',
+  'DAILY',
+  'WEEKLY',
+  'BIWEEKLY',
+  'MONTHLY',
+  'YEARLY',
+]);
+
 const createTodoSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   dueDate: z.string().optional(),
   assigneeId: z.string().optional(),
   labelIds: z.string().optional(),
+  recurrenceType: recurrenceTypeEnum.optional().default('NONE'),
 });
 
 const updateTodoSchema = z.object({
@@ -65,6 +75,7 @@ export async function createTodo(
     dueDate: formData.get('dueDate') || undefined,
     assigneeId: formData.get('assigneeId') || undefined,
     labelIds: formData.get('labelIds') || undefined,
+    recurrenceType: formData.get('recurrenceType') || undefined,
   };
 
   const result = createTodoSchema.safeParse(rawData);
@@ -75,7 +86,8 @@ export async function createTodo(
     };
   }
 
-  const { title, description, dueDate, assigneeId, labelIds } = result.data;
+  const { title, description, dueDate, assigneeId, labelIds, recurrenceType } =
+    result.data;
 
   // Validate assignee belongs to same tenant (IDOR prevention)
   if (assigneeId) {
@@ -120,6 +132,7 @@ export async function createTodo(
       assigneeId: assigneeId || undefined,
       tenantId: session.tenantId,
       createdById: session.userId,
+      recurrenceType: dueDate ? recurrenceType : 'NONE',
       labels:
         parsedLabelIds.length > 0
           ? {
