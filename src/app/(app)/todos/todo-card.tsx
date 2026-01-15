@@ -1,5 +1,6 @@
 'use client';
 
+import { MessageSquare } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { deleteTodo, toggleTodo } from '@/app/actions/todos';
 import {
@@ -27,6 +28,7 @@ type TodoCardProps = {
     dueDate: Date | null;
     assigneeId: string | null;
     assignee: { email: string } | null;
+    _count: { comments: number };
   };
   members: { id: string; email: string }[];
 };
@@ -141,6 +143,12 @@ export function TodoCard({ todo, members }: TodoCardProps) {
           <p className="text-sm text-muted-foreground">
             Due: {new Date(todo.dueDate).toLocaleDateString()}
           </p>
+        )}
+        {todo._count.comments > 0 && (
+          <div className="flex items-center gap-1 text-muted-foreground text-xs mt-2">
+            <MessageSquare className="h-3 w-3" />
+            <span>{todo._count.comments}</span>
+          </div>
         )}
       </CardContent>
     </Card>

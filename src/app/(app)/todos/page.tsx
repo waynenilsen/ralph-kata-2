@@ -47,7 +47,10 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       orderBy,
       skip,
       take,
-      include: { assignee: { select: { email: true } } },
+      include: {
+        assignee: { select: { email: true } },
+        _count: { select: { comments: true } },
+      },
     }),
     prisma.todo.count({ where }),
     prisma.user.findUnique({
