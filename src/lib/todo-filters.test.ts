@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { PrismaClient } from '@prisma/client';
 import {
   buildAssigneeWhereClause,
   buildLabelWhereClause,
@@ -6,7 +7,11 @@ import {
   filterSchema,
   PAGE_SIZE,
   parseFilters,
+  sanitizeSearchQuery,
+  searchTodoIds,
 } from './todo-filters';
+
+const prisma = new PrismaClient();
 
 describe('PAGE_SIZE', () => {
   test('is 10', () => {
@@ -15,7 +20,7 @@ describe('PAGE_SIZE', () => {
 });
 
 describe('filterSchema', () => {
-  test('has default values for status, sort, page, assignee, and label', () => {
+  test('has default values for status, sort, page, assignee, label, and q', () => {
     const result = filterSchema.parse({});
 
     expect(result.status).toBe('all');
@@ -23,6 +28,13 @@ describe('filterSchema', () => {
     expect(result.page).toBe(1);
     expect(result.assignee).toBe('all');
     expect(result.label).toBe('all');
+    expect(result.q).toBe('');
+  });
+
+  test('accepts search query q parameter', () => {
+    expect(filterSchema.parse({ q: 'buy milk' }).q).toBe('buy milk');
+    expect(filterSchema.parse({ q: 'meeting' }).q).toBe('meeting');
+    expect(filterSchema.parse({ q: '' }).q).toBe('');
   });
 
   test('accepts valid status values', () => {
@@ -114,6 +126,22 @@ describe('parseFilters', () => {
     expect(result.page).toBe(1);
     expect(result.assignee).toBe('all');
     expect(result.label).toBe('all');
+    expect(result.q).toBe('');
+  });
+
+  test('parses valid q parameter', () => {
+    expect(parseFilters({ q: 'buy milk' }).q).toBe('buy milk');
+    expect(parseFilters({ q: 'meeting' }).q).toBe('meeting');
+  });
+
+  test('handles undefined q value', () => {
+    const result = parseFilters({ q: undefined });
+    expect(result.q).toBe('');
+  });
+
+  test('handles array q values by taking first element', () => {
+    const result = parseFilters({ q: ['buy', 'sell'] });
+    expect(result.q).toBe('buy');
   });
 
   test('parses valid status parameter', () => {
@@ -418,5 +446,182 @@ describe('buildLabelWhereClause', () => {
     const result = buildLabelWhereClause(uuid);
 
     expect(result).toEqual({ labels: { some: { labelId: uuid } } });
+  });
+});
+
+describe('sanitizeSearchQuery', () => {
+  test('returns empty string for empty input', () => {
+    expect(sanitizeSearchQuery('')).toBe('');
+  });
+
+  test('returns empty string for whitespace-only input', () => {
+    expect(sanitizeSearchQuery('   ')).toBe('');
+    expect(sanitizeSearchQuery('\t\n')).toBe('');
+  });
+
+  test('trims whitespace from input', () => {
+    expect(sanitizeSearchQuery('  hello  ')).toBe('hello');
+  });
+
+  test('removes FTS5 special characters *', () => {
+    expect(sanitizeSearchQuery('hello*world')).toBe('hello world');
+  });
+
+  test('removes FTS5 special characters "', () => {
+    expect(sanitizeSearchQuery('hello"world')).toBe('hello world');
+  });
+
+  test('removes FTS5 special characters ()', () => {
+    expect(sanitizeSearchQuery('hello(world)')).toBe('hello world');
+  });
+
+  test('removes FTS5 special characters :', () => {
+    expect(sanitizeSearchQuery('hello:world')).toBe('hello world');
+  });
+
+  test('removes FTS5 special characters -', () => {
+    expect(sanitizeSearchQuery('hello-world')).toBe('hello world');
+  });
+
+  test('normalizes multiple spaces to single space', () => {
+    expect(sanitizeSearchQuery('hello   world')).toBe('hello world');
+  });
+
+  test('handles multiple words', () => {
+    expect(sanitizeSearchQuery('buy groceries')).toBe('buy groceries');
+  });
+
+  test('limits query length to 100 characters', () => {
+    const longQuery = 'a'.repeat(150);
+    const result = sanitizeSearchQuery(longQuery);
+    expect(result.length).toBeLessThanOrEqual(100);
+  });
+
+  test('truncates before sanitizing to handle edge cases', () => {
+    const longQuery = 'a'.repeat(100) + '*test';
+    const result = sanitizeSearchQuery(longQuery);
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result).not.toContain('*');
+  });
+
+  test('preserves alphanumeric characters', () => {
+    expect(sanitizeSearchQuery('abc123')).toBe('abc123');
+  });
+
+  test('preserves common punctuation that is not FTS5 special', () => {
+    expect(sanitizeSearchQuery("hello's")).toBe("hello's");
+    expect(sanitizeSearchQuery('hello.world')).toBe('hello.world');
+  });
+
+  test('handles complex input with multiple special characters', () => {
+    expect(sanitizeSearchQuery('hello* "world" (test): -foo')).toBe(
+      'hello world test foo',
+    );
+  });
+
+  test('returns empty string when all characters are special', () => {
+    expect(sanitizeSearchQuery('*"():-')).toBe('');
+  });
+
+  test('is case-preserving', () => {
+    expect(sanitizeSearchQuery('Hello World')).toBe('Hello World');
+  });
+});
+
+describe('searchTodoIds', () => {
+  let tenantId: string;
+  let userId: string;
+  let todoId1: string;
+  let todoId2: string;
+
+  beforeAll(async () => {
+    // Create test tenant and user
+    const tenant = await prisma.tenant.create({
+      data: { name: 'Search Test Tenant' },
+    });
+    tenantId = tenant.id;
+
+    const user = await prisma.user.create({
+      data: {
+        email: `search-test-${Date.now()}@example.com`,
+        passwordHash: 'test-hash',
+        tenantId,
+        role: 'ADMIN',
+      },
+    });
+    userId = user.id;
+
+    // Create test todos
+    const todo1 = await prisma.todo.create({
+      data: {
+        title: 'UniqueSearchTest123 in title',
+        description: 'Regular description here',
+        tenantId,
+        createdById: userId,
+      },
+    });
+    todoId1 = todo1.id;
+
+    const todo2 = await prisma.todo.create({
+      data: {
+        title: 'Another todo',
+        description: 'UniqueSearchTest456 in description',
+        tenantId,
+        createdById: userId,
+      },
+    });
+    todoId2 = todo2.id;
+  });
+
+  afterAll(async () => {
+    await prisma.todo.deleteMany({ where: { tenantId } });
+    await prisma.user.deleteMany({ where: { tenantId } });
+    await prisma.tenant.delete({ where: { id: tenantId } });
+    await prisma.$disconnect();
+  });
+
+  test('returns null for undefined search', async () => {
+    const result = await searchTodoIds(undefined);
+    expect(result).toBeNull();
+  });
+
+  test('returns null for empty string search', async () => {
+    const result = await searchTodoIds('');
+    expect(result).toBeNull();
+  });
+
+  test('returns null for whitespace-only search', async () => {
+    const result = await searchTodoIds('   ');
+    expect(result).toBeNull();
+  });
+
+  test('returns null when search sanitizes to empty', async () => {
+    const result = await searchTodoIds('*"():-');
+    expect(result).toBeNull();
+  });
+
+  test('finds todo by title match', async () => {
+    const result = await searchTodoIds('UniqueSearchTest123');
+    expect(result).not.toBeNull();
+    expect(result).toContain(todoId1);
+  });
+
+  test('finds todo by description match', async () => {
+    const result = await searchTodoIds('UniqueSearchTest456');
+    expect(result).not.toBeNull();
+    expect(result).toContain(todoId2);
+  });
+
+  test('returns empty array when no matches found', async () => {
+    const result = await searchTodoIds('NoMatchingTodoXYZ789');
+    expect(result).not.toBeNull();
+    expect(result).toEqual([]);
+  });
+
+  test('supports prefix matching', async () => {
+    const result = await searchTodoIds('UniqueSearch');
+    expect(result).not.toBeNull();
+    expect(result).toContain(todoId1);
+    expect(result).toContain(todoId2);
   });
 });

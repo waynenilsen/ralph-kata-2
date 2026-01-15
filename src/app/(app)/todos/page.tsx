@@ -9,6 +9,7 @@ import {
   buildPrismaQuery,
   PAGE_SIZE,
   parseFilters,
+  searchTodoIds,
 } from '@/lib/todo-filters';
 import { CreateTodoForm } from './create-todo-form';
 import { InviteForm } from './invite-form';
@@ -42,7 +43,17 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
   );
   // Apply label filter
   const labelWhere = buildLabelWhereClause(filters.label);
-  const where = { ...baseWhere, ...assigneeWhere, ...labelWhere };
+  // Apply search filter
+  const searchMatchIds = await searchTodoIds(filters.q);
+  // Build search where clause - if search returns empty array, no todos match
+  const searchWhere =
+    searchMatchIds !== null ? { id: { in: searchMatchIds } } : {};
+  const where = {
+    ...baseWhere,
+    ...assigneeWhere,
+    ...labelWhere,
+    ...searchWhere,
+  };
 
   const [todos, totalCount, user, members, labels] = await Promise.all([
     prisma.todo.findMany({
