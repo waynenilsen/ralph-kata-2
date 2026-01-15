@@ -1327,6 +1327,356 @@ describe('updateTodoRecurrence', () => {
   });
 });
 
+describe('updateTodo activity generation', () => {
+  const testTenantId = `tenant-update-activity-${Date.now()}`;
+  const testUserId = `user-update-activity-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-update-activity-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for update activity test',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('creates ASSIGNEE_CHANGED activity when assignee changes', async () => {
+    // Create another user in the same tenant for assignment
+    const assigneeId = `assignee-activity-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-activity-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for update activity test');
+    formData.set('assigneeId', assigneeId);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('assigneeId');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBe(assigneeId);
+  });
+
+  test('creates ASSIGNEE_CHANGED activity when changing from one assignee to another', async () => {
+    // Create two users in the same tenant
+    const assignee1Id = `assignee1-activity-${Date.now()}`;
+    const assignee2Id = `assignee2-activity-${Date.now()}`;
+    await prisma.user.createMany({
+      data: [
+        {
+          id: assignee1Id,
+          email: `assignee1-activity-${Date.now()}@example.com`,
+          passwordHash: 'hashed',
+          role: 'MEMBER',
+          tenantId: testTenantId,
+        },
+        {
+          id: assignee2Id,
+          email: `assignee2-activity-${Date.now()}@example.com`,
+          passwordHash: 'hashed',
+          role: 'MEMBER',
+          tenantId: testTenantId,
+        },
+      ],
+    });
+
+    // First assign to assignee1
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId: assignee1Id },
+    });
+
+    // Now change to assignee2
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for update activity test');
+    formData.set('assigneeId', assignee2Id);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify ASSIGNEE_CHANGED activity was created with old and new values
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('assigneeId');
+    expect(activity?.oldValue).toBe(assignee1Id);
+    expect(activity?.newValue).toBe(assignee2Id);
+  });
+
+  test('creates ASSIGNEE_CHANGED activity when unassigning', async () => {
+    // Create a user and assign them first
+    const assigneeId = `assignee-unassign-activity-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-unassign-activity-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    // Now unassign (no assigneeId in form data)
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for update activity test');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('assigneeId');
+    expect(activity?.oldValue).toBe(assigneeId);
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('does not create ASSIGNEE_CHANGED activity when assignee unchanged', async () => {
+    // Create a user and assign them
+    const assigneeId = `assignee-unchanged-activity-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-unchanged-activity-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    // Update with same assignee
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for update activity test');
+    formData.set('assigneeId', assigneeId);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify no ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+});
+
+describe('updateTodoAssignee activity generation', () => {
+  const testTenantId = `tenant-assignee-activity-${Date.now()}`;
+  const testUserId = `user-assignee-activity-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-assignee-activity-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for assignee activity test',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.notification.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('creates ASSIGNEE_CHANGED activity when assigning', async () => {
+    // Create another user in the same tenant
+    const assigneeId = `assignee-quick-activity-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-quick-activity-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, assigneeId);
+
+    expect(result.success).toBe(true);
+
+    // Verify ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('assigneeId');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBe(assigneeId);
+  });
+
+  test('creates ASSIGNEE_CHANGED activity when unassigning', async () => {
+    // Create a user and assign them first
+    const assigneeId = `assignee-unassign-quick-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-unassign-quick-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, null);
+
+    expect(result.success).toBe(true);
+
+    // Verify ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('assigneeId');
+    expect(activity?.oldValue).toBe(assigneeId);
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('does not create ASSIGNEE_CHANGED activity when assignee unchanged', async () => {
+    // Create a user and assign them
+    const assigneeId = `assignee-noop-activity-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-noop-activity-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, assigneeId);
+
+    expect(result.success).toBe(true);
+
+    // Verify no ASSIGNEE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ASSIGNEE_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+});
+
 describe('toggleTodo activity generation', () => {
   const testTenantId = `tenant-toggle-activity-${Date.now()}`;
   const testUserId = `user-toggle-activity-${Date.now()}`;

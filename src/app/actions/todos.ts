@@ -351,6 +351,19 @@ export async function updateTodo(
     };
   }
 
+  // REQ-004: Create activity for assignee change (only if actually changed)
+  const newAssigneeId = assigneeId ?? null;
+  if (newAssigneeId !== currentTodo.assigneeId) {
+    await createTodoActivity({
+      todoId: id,
+      actorId: session.userId,
+      action: 'ASSIGNEE_CHANGED',
+      field: 'assigneeId',
+      oldValue: currentTodo.assigneeId,
+      newValue: newAssigneeId,
+    });
+  }
+
   // REQ-003: Create notification if assigning to someone else (not self-assignment)
   // and the assignee is different from the previous assignee
   if (
@@ -424,6 +437,11 @@ export async function updateTodoAssignee(
     };
   }
 
+  // REQ-005: Skip if assignee unchanged (no-op)
+  if (assigneeId === todo.assigneeId) {
+    return { success: true };
+  }
+
   // Use updateMany with tenantId filter to prevent IDOR attacks
   const updateResult = await prisma.todo.updateMany({
     where: {
@@ -441,13 +459,18 @@ export async function updateTodoAssignee(
     };
   }
 
+  // REQ-004: Create activity for assignee change
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'ASSIGNEE_CHANGED',
+    field: 'assigneeId',
+    oldValue: todo.assigneeId,
+    newValue: assigneeId,
+  });
+
   // Create notification if assigning to someone else (not self-assignment)
-  // and the assignee is different from the previous assignee
-  if (
-    assigneeId &&
-    assigneeId !== session.userId &&
-    assigneeId !== todo.assigneeId
-  ) {
+  if (assigneeId && assigneeId !== session.userId) {
     const assigner = await prisma.user.findUnique({
       where: { id: session.userId },
       select: { email: true },
