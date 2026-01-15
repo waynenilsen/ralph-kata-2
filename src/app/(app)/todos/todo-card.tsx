@@ -44,7 +44,10 @@ type TodoCardProps = {
       };
     }[];
     subtasks: {
+      id: string;
+      title: string;
       isComplete: boolean;
+      order: number;
     }[];
   };
   members: { id: string; email: string }[];

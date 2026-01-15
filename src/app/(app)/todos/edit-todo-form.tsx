@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { CommentSection } from './comment-section';
 import { LabelSelector } from './label-selector';
+import { SubtaskSection } from './subtask-section';
 
 type EditTodoFormProps = {
   todo: {
@@ -35,6 +36,12 @@ type EditTodoFormProps = {
         name: string;
         color: string;
       };
+    }[];
+    subtasks: {
+      id: string;
+      title: string;
+      isComplete: boolean;
+      order: number;
     }[];
   };
   members: { id: string; email: string }[];
@@ -190,6 +197,8 @@ export function EditTodoForm({
           </Button>
         </div>
       </form>
+
+      <SubtaskSection todoId={todo.id} subtasks={todo.subtasks} />
 
       <CommentSection todoId={todo.id} comments={todo.comments} />
     </>

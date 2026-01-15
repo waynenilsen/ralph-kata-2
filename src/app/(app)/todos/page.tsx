@@ -75,7 +75,8 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
           include: { label: true },
         },
         subtasks: {
-          select: { isComplete: true },
+          select: { id: true, title: true, isComplete: true, order: true },
+          orderBy: { order: 'asc' },
         },
       },
     }),
