@@ -1326,3 +1326,93 @@ describe('updateTodoRecurrence', () => {
     expect(result.error).toContain('not found');
   });
 });
+
+describe('toggleTodo activity generation', () => {
+  const testTenantId = `tenant-toggle-activity-${Date.now()}`;
+  const testUserId = `user-toggle-activity-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-toggle-activity-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo with PENDING status
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for activity test',
+        status: 'PENDING',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('creates STATUS_CHANGED activity when toggling from PENDING to COMPLETED', async () => {
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify STATUS_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'STATUS_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('status');
+    expect(activity?.oldValue).toBe('PENDING');
+    expect(activity?.newValue).toBe('COMPLETED');
+  });
+
+  test('creates STATUS_CHANGED activity when toggling from COMPLETED to PENDING', async () => {
+    // First set status to COMPLETED
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { status: 'COMPLETED' },
+    });
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify STATUS_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'STATUS_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('status');
+    expect(activity?.oldValue).toBe('COMPLETED');
+    expect(activity?.newValue).toBe('PENDING');
+  });
+});

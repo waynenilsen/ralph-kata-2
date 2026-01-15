@@ -206,6 +206,16 @@ export async function toggleTodo(todoId: string): Promise<ToggleTodoResult> {
     },
   });
 
+  // REQ-004: Create activity for status change
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'STATUS_CHANGED',
+    field: 'status',
+    oldValue: todo.status,
+    newValue: newStatus,
+  });
+
   // Generate next recurring instance when completing a recurring todo
   if (
     newStatus === 'COMPLETED' &&
