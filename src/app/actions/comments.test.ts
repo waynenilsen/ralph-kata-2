@@ -73,6 +73,11 @@ describe('createComment', () => {
 
   afterEach(async () => {
     // Clean up in order (respect FK constraints)
+    await prisma.notification.deleteMany({
+      where: {
+        user: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
     await prisma.comment.deleteMany({
       where: {
         todo: { tenantId: { in: [testTenant.id, otherTenant.id] } },
@@ -205,5 +210,123 @@ describe('createComment', () => {
       where: { todoId: testTodo.id },
     });
     expect(comment?.content).toBe('Content with whitespace');
+  });
+
+  test('creates notification when commenting on another user todo', async () => {
+    // Create another user in the same tenant who will create a todo
+    const todoCreator = await prisma.user.create({
+      data: {
+        email: `todo-creator-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+      },
+    });
+    const creatorTodo = await prisma.todo.create({
+      data: {
+        title: 'Todo by Creator',
+        tenantId: testTenant.id,
+        createdById: todoCreator.id,
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('content', 'Comment on your todo');
+
+    const result = await createComment(
+      creatorTodo.id,
+      {} as CreateCommentState,
+      formData,
+    );
+
+    expect(result.success).toBe(true);
+
+    // Verify notification was created for the todo creator
+    const notification = await prisma.notification.findFirst({
+      where: { userId: todoCreator.id },
+    });
+    expect(notification).toBeDefined();
+    expect(notification?.type).toBe('TODO_COMMENTED');
+    expect(notification?.todoId).toBe(creatorTodo.id);
+    expect(notification?.isRead).toBe(false);
+
+    // Clean up
+    await prisma.notification.deleteMany({
+      where: { userId: todoCreator.id },
+    });
+    await prisma.comment.deleteMany({
+      where: { todoId: creatorTodo.id },
+    });
+    await prisma.todo.delete({ where: { id: creatorTodo.id } });
+    await prisma.user.delete({ where: { id: todoCreator.id } });
+  });
+
+  test('notification message includes commenter email and todo title', async () => {
+    // Create another user in the same tenant who will create a todo
+    const todoCreator = await prisma.user.create({
+      data: {
+        email: `todo-creator-msg-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+      },
+    });
+    const creatorTodo = await prisma.todo.create({
+      data: {
+        title: 'My Important Todo',
+        tenantId: testTenant.id,
+        createdById: todoCreator.id,
+      },
+    });
+
+    // Get the commenter's email for comparison
+    const commenter = await prisma.user.findUnique({
+      where: { id: testUser.id },
+      select: { email: true },
+    });
+
+    const formData = new FormData();
+    formData.set('content', 'Nice todo!');
+
+    await createComment(creatorTodo.id, {} as CreateCommentState, formData);
+
+    const notification = await prisma.notification.findFirst({
+      where: { userId: todoCreator.id },
+    });
+    expect(notification?.message).toBe(
+      `${commenter?.email} commented on "My Important Todo"`,
+    );
+
+    // Clean up
+    await prisma.notification.deleteMany({
+      where: { userId: todoCreator.id },
+    });
+    await prisma.comment.deleteMany({
+      where: { todoId: creatorTodo.id },
+    });
+    await prisma.todo.delete({ where: { id: creatorTodo.id } });
+    await prisma.user.delete({ where: { id: todoCreator.id } });
+  });
+
+  test('does not create notification for self-comment', async () => {
+    // testUser is commenting on testTodo which they created
+    const formData = new FormData();
+    formData.set('content', 'My own comment on my own todo');
+
+    const result = await createComment(
+      testTodo.id,
+      {} as CreateCommentState,
+      formData,
+    );
+
+    expect(result.success).toBe(true);
+
+    // Verify no notification was created
+    const notification = await prisma.notification.findFirst({
+      where: {
+        userId: testUser.id,
+        type: 'TODO_COMMENTED',
+        todoId: testTodo.id,
+      },
+    });
+    expect(notification).toBeNull();
   });
 });

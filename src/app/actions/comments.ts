@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { createNotification } from './notifications';
 
 export type CreateCommentState = {
   success?: boolean;
@@ -44,6 +45,11 @@ export async function createComment(
       id: todoId,
       tenantId: session.tenantId,
     },
+    select: {
+      id: true,
+      title: true,
+      createdById: true,
+    },
   });
 
   if (!todo) {
@@ -57,6 +63,21 @@ export async function createComment(
       authorId: session.userId,
     },
   });
+
+  // REQ-004: Create notification if commenting on someone else's todo (not self-comment)
+  if (todo.createdById !== session.userId) {
+    const commenter = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { email: true },
+    });
+
+    await createNotification({
+      userId: todo.createdById,
+      type: 'TODO_COMMENTED',
+      message: `${commenter?.email ?? 'Someone'} commented on "${todo.title}"`,
+      todoId,
+    });
+  }
 
   revalidatePath('/todos');
 
