@@ -1,5 +1,6 @@
 'use server';
 
+import type { RecurrenceType } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -360,6 +361,68 @@ export async function updateTodoAssignee(
       error: 'Todo not found or you do not have permission to update it',
     };
   }
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+export type UpdateTodoRecurrenceResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Updates the recurrence setting of a todo.
+ * Validates that recurrence can only be set when a due date is present.
+ * @param todoId - The ID of the todo to update
+ * @param recurrenceType - The new recurrence type
+ * @returns The result of the update operation
+ */
+export async function updateTodoRecurrence(
+  todoId: string,
+  recurrenceType: RecurrenceType,
+): Promise<UpdateTodoRecurrenceResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to update todo recurrence',
+    };
+  }
+
+  // Get the todo to verify tenant and check for due date
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { dueDate: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to update it',
+    };
+  }
+
+  // Recurrence requires a due date (except when setting to NONE)
+  if (recurrenceType !== 'NONE' && !todo.dueDate) {
+    return {
+      error: 'Cannot set recurrence without a due date',
+    };
+  }
+
+  // Update the recurrence type
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      recurrenceType,
+    },
+  });
 
   revalidatePath('/todos');
 

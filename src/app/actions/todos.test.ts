@@ -16,8 +16,14 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTodo, toggleTodo, updateTodo, deleteTodo, updateTodoAssignee } =
-  await import('./todos');
+const {
+  createTodo,
+  toggleTodo,
+  updateTodo,
+  deleteTodo,
+  updateTodoAssignee,
+  updateTodoRecurrence,
+} = await import('./todos');
 
 describe('createTodo', () => {
   const testTenantId = `tenant-${Date.now()}`;
@@ -981,6 +987,186 @@ describe('updateTodoAssignee', () => {
 
   test('returns error for non-existent todo', async () => {
     const result = await updateTodoAssignee('non-existent-todo', testUserId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+  });
+});
+
+describe('updateTodoRecurrence', () => {
+  const testTenantId = `tenant-recurrence-${Date.now()}`;
+  const testUserId = `user-recurrence-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-recurrence-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo with due date
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for recurrence test',
+        dueDate: new Date('2026-01-15'),
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('updates recurrenceType when todo has due date', async () => {
+    const result = await updateTodoRecurrence(testTodoId, 'WEEKLY');
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.recurrenceType).toBe('WEEKLY');
+  });
+
+  test('updates recurrenceType to NONE', async () => {
+    // First set to WEEKLY
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { recurrenceType: 'WEEKLY' },
+    });
+
+    const result = await updateTodoRecurrence(testTodoId, 'NONE');
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.recurrenceType).toBe('NONE');
+  });
+
+  test('updates to all recurrence types', async () => {
+    const recurrenceTypes = [
+      'DAILY',
+      'WEEKLY',
+      'BIWEEKLY',
+      'MONTHLY',
+      'YEARLY',
+    ] as const;
+
+    for (const recurrenceType of recurrenceTypes) {
+      const result = await updateTodoRecurrence(testTodoId, recurrenceType);
+      expect(result.success).toBe(true);
+
+      const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+      expect(todo?.recurrenceType).toBe(recurrenceType);
+    }
+  });
+
+  test('returns error when setting recurrence without due date', async () => {
+    // Remove due date from todo
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { dueDate: null },
+    });
+
+    const result = await updateTodoRecurrence(testTodoId, 'WEEKLY');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('due date');
+
+    // Verify recurrence was not set
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.recurrenceType).toBe('NONE');
+  });
+
+  test('allows setting NONE even without due date', async () => {
+    // Remove due date from todo
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { dueDate: null },
+    });
+
+    const result = await updateTodoRecurrence(testTodoId, 'NONE');
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await updateTodoRecurrence(testTodoId, 'WEEKLY');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-recurrence-other-${Date.now()}`;
+    const otherUserId = `user-recurrence-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `recurrence-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        dueDate: new Date('2026-01-15'),
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to update the other tenant's todo recurrence
+    const result = await updateTodoRecurrence(otherTodo.id, 'WEEKLY');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify recurrence was not updated
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo?.recurrenceType).toBe('NONE');
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await updateTodoRecurrence('non-existent-todo', 'WEEKLY');
 
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');
