@@ -6,7 +6,7 @@ SERVICE_NAME="ralph-kata-2"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SERVICE_FILE="${SERVICE_DIR}/${SERVICE_NAME}.service"
 WORKING_DIR="$(cd "$(dirname "$0")" && pwd)"
-PORT=8080
+PORT=80
 DB_PATH="${WORKING_DIR}/data/prod.db"
 
 # Detect node path
@@ -38,7 +38,7 @@ WorkingDirectory=${WORKING_DIR}
 Environment=NODE_ENV=production
 Environment=PORT=${PORT}
 Environment=DATABASE_URL=file:${DB_PATH}
-ExecStart=${NODE_PATH} ${WORKING_DIR}/.next/standalone/server.js
+ExecStart=/usr/bin/authbind --deep ${NODE_PATH} ${WORKING_DIR}/.next/standalone/server.js
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
