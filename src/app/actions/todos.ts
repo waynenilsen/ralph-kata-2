@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { generateNextRecurringTodo } from '@/lib/recurrence';
 import { getSession } from '@/lib/session';
+import { createTodoActivity } from './activities';
 import { createNotification } from './notifications';
 
 const recurrenceTypeEnum = z.enum([
@@ -125,7 +126,7 @@ export async function createTodo(
     }
   }
 
-  await prisma.todo.create({
+  const todo = await prisma.todo.create({
     data: {
       title,
       description,
@@ -143,6 +144,13 @@ export async function createTodo(
             }
           : undefined,
     },
+  });
+
+  // REQ-003: Create activity for todo creation
+  await createTodoActivity({
+    todoId: todo.id,
+    actorId: session.userId,
+    action: 'CREATED',
   });
 
   revalidatePath('/todos');

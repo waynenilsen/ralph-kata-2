@@ -211,6 +211,33 @@ describe('createTodo', () => {
 
     expect(todo?.assigneeId).toBeNull();
   });
+
+  test('creates CREATED activity when todo is created', async () => {
+    const formData = new FormData();
+    formData.set('title', 'Todo with activity');
+
+    const result = await createTodo({} as CreateTodoState, formData);
+
+    expect(result.errors).toBeUndefined();
+
+    const todo = await prisma.todo.findFirst({
+      where: { tenantId: testTenantId, title: 'Todo with activity' },
+    });
+
+    expect(todo).not.toBeNull();
+
+    // Verify CREATED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: todo?.id },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.action).toBe('CREATED');
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBeNull();
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
 });
 
 describe('toggleTodo', () => {
