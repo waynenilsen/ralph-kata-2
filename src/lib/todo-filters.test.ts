@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildAssigneeWhereClause,
   buildPrismaQuery,
   filterSchema,
   PAGE_SIZE,
@@ -13,12 +14,13 @@ describe('PAGE_SIZE', () => {
 });
 
 describe('filterSchema', () => {
-  test('has default values for status, sort, and page', () => {
+  test('has default values for status, sort, page, and assignee', () => {
     const result = filterSchema.parse({});
 
     expect(result.status).toBe('all');
     expect(result.sort).toBe('created-desc');
     expect(result.page).toBe(1);
+    expect(result.assignee).toBe('all');
   });
 
   test('accepts valid status values', () => {
@@ -71,6 +73,23 @@ describe('filterSchema', () => {
   test('rejects invalid page values (non-numeric string)', () => {
     expect(() => filterSchema.parse({ page: 'abc' })).toThrow();
   });
+
+  test('accepts valid assignee values', () => {
+    expect(filterSchema.parse({ assignee: 'all' }).assignee).toBe('all');
+    expect(filterSchema.parse({ assignee: 'me' }).assignee).toBe('me');
+    expect(filterSchema.parse({ assignee: 'unassigned' }).assignee).toBe(
+      'unassigned',
+    );
+  });
+
+  test('accepts userId as assignee value', () => {
+    expect(filterSchema.parse({ assignee: 'user-123' }).assignee).toBe(
+      'user-123',
+    );
+    expect(filterSchema.parse({ assignee: 'some-uuid-value' }).assignee).toBe(
+      'some-uuid-value',
+    );
+  });
 });
 
 describe('parseFilters', () => {
@@ -80,6 +99,7 @@ describe('parseFilters', () => {
     expect(result.status).toBe('all');
     expect(result.sort).toBe('created-desc');
     expect(result.page).toBe(1);
+    expect(result.assignee).toBe('all');
   });
 
   test('parses valid status parameter', () => {
@@ -153,6 +173,30 @@ describe('parseFilters', () => {
     const result = parseFilters({ page: ['2', '3'] });
 
     expect(result.page).toBe(2);
+  });
+
+  test('parses valid assignee parameter', () => {
+    expect(parseFilters({ assignee: 'all' }).assignee).toBe('all');
+    expect(parseFilters({ assignee: 'me' }).assignee).toBe('me');
+    expect(parseFilters({ assignee: 'unassigned' }).assignee).toBe(
+      'unassigned',
+    );
+  });
+
+  test('parses userId assignee parameter', () => {
+    expect(parseFilters({ assignee: 'user-123' }).assignee).toBe('user-123');
+  });
+
+  test('handles undefined assignee value', () => {
+    const result = parseFilters({ assignee: undefined });
+
+    expect(result.assignee).toBe('all');
+  });
+
+  test('handles array assignee values by taking first element', () => {
+    const result = parseFilters({ assignee: ['me', 'unassigned'] });
+
+    expect(result.assignee).toBe('me');
   });
 });
 
@@ -284,5 +328,40 @@ describe('buildPrismaQuery', () => {
 
     expect(result.skip).toBe(4 * PAGE_SIZE);
     expect(result.take).toBe(PAGE_SIZE);
+  });
+});
+
+describe('buildAssigneeWhereClause', () => {
+  const currentUserId = 'user-123';
+
+  test('returns empty object for assignee all', () => {
+    const result = buildAssigneeWhereClause('all', currentUserId);
+
+    expect(result).toEqual({});
+  });
+
+  test('returns assigneeId with currentUserId for assignee me', () => {
+    const result = buildAssigneeWhereClause('me', currentUserId);
+
+    expect(result).toEqual({ assigneeId: currentUserId });
+  });
+
+  test('returns assigneeId null for assignee unassigned', () => {
+    const result = buildAssigneeWhereClause('unassigned', currentUserId);
+
+    expect(result).toEqual({ assigneeId: null });
+  });
+
+  test('returns assigneeId with specific userId for custom assignee value', () => {
+    const result = buildAssigneeWhereClause('other-user-456', currentUserId);
+
+    expect(result).toEqual({ assigneeId: 'other-user-456' });
+  });
+
+  test('handles UUID-style assignee values', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+    const result = buildAssigneeWhereClause(uuid, currentUserId);
+
+    expect(result).toEqual({ assigneeId: uuid });
   });
 });
