@@ -315,10 +315,10 @@ export async function updateTodo(
     }
   }
 
-  // Fetch current todo to check previous assignee for notification
+  // Fetch current todo to check previous assignee and due date for activity tracking
   const currentTodo = await prisma.todo.findFirst({
     where: { id, tenantId: session.tenantId },
-    select: { assigneeId: true, title: true },
+    select: { assigneeId: true, dueDate: true, title: true },
   });
 
   if (!currentTodo) {
@@ -361,6 +361,21 @@ export async function updateTodo(
       field: 'assigneeId',
       oldValue: currentTodo.assigneeId,
       newValue: newAssigneeId,
+    });
+  }
+
+  // REQ-004: Create activity for due date change (only if actually changed)
+  const newDueDate = dueDate ? new Date(dueDate) : null;
+  const oldDueDateIso = currentTodo.dueDate?.toISOString() ?? null;
+  const newDueDateIso = newDueDate?.toISOString() ?? null;
+  if (oldDueDateIso !== newDueDateIso) {
+    await createTodoActivity({
+      todoId: id,
+      actorId: session.userId,
+      action: 'DUE_DATE_CHANGED',
+      field: 'dueDate',
+      oldValue: oldDueDateIso,
+      newValue: newDueDateIso,
     });
   }
 

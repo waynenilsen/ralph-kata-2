@@ -1766,3 +1766,179 @@ describe('toggleTodo activity generation', () => {
     expect(activity?.newValue).toBe('PENDING');
   });
 });
+
+describe('updateTodo due date activity generation', () => {
+  const testTenantId = `tenant-duedate-activity-${Date.now()}`;
+  const testUserId = `user-duedate-activity-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-duedate-activity-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for due date activity test',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('creates DUE_DATE_CHANGED activity when setting due date from null', async () => {
+    const dueDate = '2026-06-15';
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for due date activity test');
+    formData.set('dueDate', dueDate);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DUE_DATE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DUE_DATE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('dueDate');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBe(new Date(dueDate).toISOString());
+  });
+
+  test('creates DUE_DATE_CHANGED activity when clearing due date to null', async () => {
+    // First set a due date
+    const originalDueDate = new Date('2026-06-15');
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { dueDate: originalDueDate },
+    });
+
+    // Now clear the due date (no dueDate in form data)
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for due date activity test');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DUE_DATE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DUE_DATE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('dueDate');
+    expect(activity?.oldValue).toBe(originalDueDate.toISOString());
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('creates DUE_DATE_CHANGED activity when changing from one date to another', async () => {
+    // First set a due date
+    const originalDueDate = new Date('2026-06-15');
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { dueDate: originalDueDate },
+    });
+
+    // Now change to a different date
+    const newDueDate = '2026-07-20';
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for due date activity test');
+    formData.set('dueDate', newDueDate);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DUE_DATE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DUE_DATE_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('dueDate');
+    expect(activity?.oldValue).toBe(originalDueDate.toISOString());
+    expect(activity?.newValue).toBe(new Date(newDueDate).toISOString());
+  });
+
+  test('does not create DUE_DATE_CHANGED activity when due date unchanged', async () => {
+    // First set a due date
+    const dueDate = new Date('2026-06-15');
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { dueDate },
+    });
+
+    // Update with same due date
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for due date activity test');
+    formData.set('dueDate', '2026-06-15');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify no DUE_DATE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DUE_DATE_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+
+  test('does not create DUE_DATE_CHANGED activity when both old and new are null', async () => {
+    // Todo already has no due date, update without due date
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Updated title');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify no DUE_DATE_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DUE_DATE_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+});
