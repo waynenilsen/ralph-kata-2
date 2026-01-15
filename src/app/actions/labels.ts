@@ -207,3 +207,62 @@ export async function deleteLabel(labelId: string): Promise<LabelState> {
 
   return { success: true };
 }
+
+/**
+ * Updates labels on a todo (replaces all existing labels).
+ * Any tenant member can update labels on todos in their tenant.
+ * Uses a transaction for atomic delete + create operations.
+ *
+ * @param todoId - The ID of the todo to update labels for
+ * @param labelIds - Array of label IDs to assign to the todo
+ * @returns The result of the update operation
+ */
+export async function updateTodoLabels(
+  todoId: string,
+  labelIds: string[],
+): Promise<LabelState> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Verify todo belongs to user's tenant
+  const todo = await prisma.todo.findUnique({
+    where: { id: todoId },
+    select: { tenantId: true },
+  });
+
+  if (!todo || todo.tenantId !== session.tenantId) {
+    return { error: 'Todo not found' };
+  }
+
+  // Deduplicate label IDs
+  const uniqueLabelIds = [...new Set(labelIds)];
+
+  // Verify all labels belong to the same tenant
+  if (uniqueLabelIds.length > 0) {
+    const labels = await prisma.label.findMany({
+      where: {
+        id: { in: uniqueLabelIds },
+        tenantId: session.tenantId,
+      },
+    });
+
+    if (labels.length !== uniqueLabelIds.length) {
+      return { error: 'Invalid labels' };
+    }
+  }
+
+  // Replace all labels on the todo using a transaction
+  await prisma.$transaction([
+    prisma.todoLabel.deleteMany({ where: { todoId } }),
+    ...uniqueLabelIds.map((labelId) =>
+      prisma.todoLabel.create({ data: { todoId, labelId } }),
+    ),
+  ]);
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
