@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { takeScreenshot } from './utils/screenshot';
+import { clickLogout } from './utils/user-menu';
 
 test.describe('Login flow', () => {
   const testEmail = `login-test-${Date.now()}@example.com`;
@@ -119,7 +120,7 @@ test.describe('Login flow', () => {
     await expect(page).toHaveURL('/todos');
     await takeScreenshot(page, 'login', 'logout-flow', '01-logged-in');
 
-    await page.getByRole('button', { name: /logout/i }).click();
+    await clickLogout(page);
 
     await expect(page).toHaveURL('/login');
     await takeScreenshot(page, 'login', 'logout-flow', '02-after-logout');

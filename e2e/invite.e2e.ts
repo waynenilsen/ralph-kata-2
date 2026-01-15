@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import { clearAllEmails, waitForEmail } from './helpers/mailhog';
 import { takeScreenshot } from './utils/screenshot';
+import { clickLogout } from './utils/user-menu';
 
 const prisma = new PrismaClient();
 
@@ -117,9 +118,9 @@ test.describe('Invite flow', () => {
     await inviteePage.waitForLoadState('networkidle');
     await expect(inviteePage).toHaveURL('/todos', { timeout: 15000 });
 
-    // Should be logged in (see the logout button)
+    // Should be logged in (see the user menu button)
     await expect(
-      inviteePage.getByRole('button', { name: /logout/i }),
+      inviteePage.getByRole('button', { name: /user menu/i }),
     ).toBeVisible();
     await takeScreenshot(
       inviteePage,
@@ -180,7 +181,7 @@ test.describe('Invite flow', () => {
     const inviteToken = inviteLinkMatch?.[1] ?? '';
 
     // Logout and go to invite page
-    await page.getByRole('button', { name: /logout/i }).click();
+    await clickLogout(page);
     await page.goto(`/invite/${inviteToken}`);
 
     // Try short password

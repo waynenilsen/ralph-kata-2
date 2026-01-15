@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { logout } from '@/app/actions/auth';
-import { Button } from '@/components/ui/button';
 import { getSession } from '@/lib/session';
+import { UserMenu } from './user-menu';
 
 export default async function AppLayout({
   children,
@@ -22,11 +22,7 @@ export default async function AppLayout({
           <Link href="/" className="font-semibold text-lg">
             TeamTodo
           </Link>
-          <form action={logout}>
-            <Button type="submit" variant="outline" size="sm">
-              Logout
-            </Button>
-          </form>
+          <UserMenu logoutAction={logout} />
         </div>
       </header>
       <main>{children}</main>

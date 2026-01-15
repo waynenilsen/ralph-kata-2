@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import { clearAllEmails, waitForEmail } from './helpers/mailhog';
 import { takeScreenshot } from './utils/screenshot';
+import { clickLogout } from './utils/user-menu';
 
 const prisma = new PrismaClient();
 
@@ -211,8 +212,10 @@ test.describe('Reset password flow', () => {
       '02-redirected-to-todos',
     );
 
-    // Should be logged in (see the logout button)
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible();
+    // Should be logged in (see the user menu button)
+    await expect(
+      page.getByRole('button', { name: /user menu/i }),
+    ).toBeVisible();
   });
 
   test('back to login link on error page navigates to login', async ({
@@ -253,7 +256,7 @@ test.describe('Reset password flow', () => {
     );
 
     // Logout
-    await page.getByRole('button', { name: /logout/i }).click();
+    await clickLogout(page);
     await expect(page).toHaveURL('/login');
     await takeScreenshot(
       page,
@@ -318,7 +321,9 @@ test.describe('Reset password flow', () => {
 
     // Should be logged in and redirected to todos
     await expect(page).toHaveURL('/todos', { timeout: 15000 });
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /user menu/i }),
+    ).toBeVisible();
     await takeScreenshot(
       page,
       'reset-password',
@@ -327,7 +332,7 @@ test.describe('Reset password flow', () => {
     );
 
     // Logout and verify we can login with new password
-    await page.getByRole('button', { name: /logout/i }).click();
+    await clickLogout(page);
     await expect(page).toHaveURL('/login');
 
     await page.getByLabel(/email/i).fill(uniqueEmail);
@@ -335,7 +340,9 @@ test.describe('Reset password flow', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
 
     await expect(page).toHaveURL('/todos', { timeout: 15000 });
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /user menu/i }),
+    ).toBeVisible();
     await takeScreenshot(
       page,
       'reset-password',
@@ -428,7 +435,9 @@ test.describe('Reset password flow', () => {
     await page1.getByRole('button', { name: /create account/i }).click();
 
     await expect(page1).toHaveURL('/todos');
-    await expect(page1.getByRole('button', { name: /logout/i })).toBeVisible();
+    await expect(
+      page1.getByRole('button', { name: /user menu/i }),
+    ).toBeVisible();
     await takeScreenshot(
       page1,
       'reset-password',
