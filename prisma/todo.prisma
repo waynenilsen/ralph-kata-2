@@ -16,6 +16,7 @@ model Todo {
   overdueReminderSentAt   DateTime?
   comments                Comment[]
   labels                  TodoLabel[]
+  subtasks                Subtask[]
 
   @@index([tenantId])
   @@index([tenantId, status])

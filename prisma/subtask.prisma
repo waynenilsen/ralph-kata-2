@@ -1,0 +1,11 @@
+model Subtask {
+  id         String   @id @default(cuid())
+  title      String
+  isComplete Boolean  @default(false)
+  order      Int      @default(0)
+  todo       Todo     @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  todoId     String
+  createdAt  DateTime @default(now())
+
+  @@index([todoId])
+}
