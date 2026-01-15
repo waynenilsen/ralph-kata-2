@@ -17,6 +17,7 @@ model Todo {
   comments                Comment[]
   labels                  TodoLabel[]
   subtasks                Subtask[]
+  recurrenceType          RecurrenceType @default(NONE)
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -30,4 +31,13 @@ model Todo {
 enum TodoStatus {
   PENDING
   COMPLETED
+}
+
+enum RecurrenceType {
+  NONE
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  YEARLY
 }
