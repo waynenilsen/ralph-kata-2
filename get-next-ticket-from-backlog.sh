@@ -5,5 +5,5 @@
 
 NUM_TICKETS=${1:-1}
 
-gh project item-list 4 --owner @me --format json --limit 100 | \
+gh project item-list 4 --owner @me --format json --limit 10000 | \
   jq -r --argjson n "$NUM_TICKETS" '[.items[] | select(.status == "Backlog")] | .[0:$n] | .[] | "#\(.content.number) \(.content.title)"'
