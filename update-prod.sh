@@ -35,13 +35,17 @@ if ! bun x prisma migrate diff --from-migrations ./prisma/migrations --to-schema
     MIGRATION_NAME="auto_migration_$(date +%Y%m%d_%H%M%S)"
     DATABASE_URL="file:${DB_PATH}" bun x prisma migrate dev --name "$MIGRATION_NAME" --skip-seed --skip-generate
 
-    # Commit and push the new migration
-    echo "Committing migration..."
+    # Commit and push the new migration if files were created
     git add prisma/migrations/
-    git commit -m "chore(db): add migration ${MIGRATION_NAME}"
+    if ! git diff --cached --quiet; then
+        echo "Committing migration..."
+        git commit -m "chore(db): add migration ${MIGRATION_NAME}"
 
-    echo "Pushing to remote..."
-    git push origin main
+        echo "Pushing to remote..."
+        git push origin main
+    else
+        echo "No new migration files to commit."
+    fi
 else
     echo "No schema changes detected."
 fi
