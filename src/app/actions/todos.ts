@@ -9,6 +9,7 @@ const createTodoSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   dueDate: z.string().optional(),
+  assigneeId: z.string().optional(),
 });
 
 const updateTodoSchema = z.object({
@@ -16,6 +17,7 @@ const updateTodoSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   dueDate: z.string().optional(),
+  assigneeId: z.string().optional(),
 });
 
 export type CreateTodoState = {
@@ -23,6 +25,7 @@ export type CreateTodoState = {
     title?: string[];
     description?: string[];
     dueDate?: string[];
+    assigneeId?: string[];
     _form?: string[];
   };
 };
@@ -33,6 +36,7 @@ export type UpdateTodoState = {
     title?: string[];
     description?: string[];
     dueDate?: string[];
+    assigneeId?: string[];
     _form?: string[];
   };
   success?: boolean;
@@ -56,6 +60,7 @@ export async function createTodo(
     title: formData.get('title'),
     description: formData.get('description') || undefined,
     dueDate: formData.get('dueDate') || undefined,
+    assigneeId: formData.get('assigneeId') || undefined,
   };
 
   const result = createTodoSchema.safeParse(rawData);
@@ -66,13 +71,28 @@ export async function createTodo(
     };
   }
 
-  const { title, description, dueDate } = result.data;
+  const { title, description, dueDate, assigneeId } = result.data;
+
+  // Validate assignee belongs to same tenant (IDOR prevention)
+  if (assigneeId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: assigneeId, tenantId: session.tenantId },
+    });
+    if (!assignee) {
+      return {
+        errors: {
+          assigneeId: ['Invalid assignee'],
+        },
+      };
+    }
+  }
 
   await prisma.todo.create({
     data: {
       title,
       description,
       dueDate: dueDate ? new Date(dueDate) : undefined,
+      assigneeId: assigneeId || undefined,
       tenantId: session.tenantId,
       createdById: session.userId,
     },
@@ -193,6 +213,7 @@ export async function updateTodo(
     title: formData.get('title'),
     description: formData.get('description') || undefined,
     dueDate: formData.get('dueDate') || undefined,
+    assigneeId: formData.get('assigneeId') || undefined,
   };
 
   const result = updateTodoSchema.safeParse(rawData);
@@ -203,7 +224,21 @@ export async function updateTodo(
     };
   }
 
-  const { id, title, description, dueDate } = result.data;
+  const { id, title, description, dueDate, assigneeId } = result.data;
+
+  // Validate assignee belongs to same tenant (IDOR prevention)
+  if (assigneeId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: assigneeId, tenantId: session.tenantId },
+    });
+    if (!assignee) {
+      return {
+        errors: {
+          assigneeId: ['Invalid assignee'],
+        },
+      };
+    }
+  }
 
   // Use updateMany with tenantId filter to prevent IDOR attacks
   const updateResult = await prisma.todo.updateMany({
@@ -215,6 +250,7 @@ export async function updateTodo(
       title,
       description,
       dueDate: dueDate ? new Date(dueDate) : null,
+      assigneeId: assigneeId ?? null,
     },
   });
 
@@ -223,6 +259,63 @@ export async function updateTodo(
       errors: {
         _form: ['Todo not found or you do not have permission to update it'],
       },
+    };
+  }
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+export type UpdateTodoAssigneeResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Updates the assignee of a todo for quick reassignment.
+ * @param todoId - The ID of the todo to update
+ * @param assigneeId - The ID of the new assignee, or null to unassign
+ * @returns The result of the update operation
+ */
+export async function updateTodoAssignee(
+  todoId: string,
+  assigneeId: string | null,
+): Promise<UpdateTodoAssigneeResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to update a todo assignee',
+    };
+  }
+
+  // Validate assignee belongs to same tenant (IDOR prevention)
+  if (assigneeId) {
+    const assignee = await prisma.user.findFirst({
+      where: { id: assigneeId, tenantId: session.tenantId },
+    });
+    if (!assignee) {
+      return {
+        error: 'Invalid assignee',
+      };
+    }
+  }
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  const updateResult = await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      assigneeId: assigneeId,
+    },
+  });
+
+  if (updateResult.count === 0) {
+    return {
+      error: 'Todo not found or you do not have permission to update it',
     };
   }
 

@@ -16,9 +16,8 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTodo, toggleTodo, updateTodo, deleteTodo } = await import(
-  './todos'
-);
+const { createTodo, toggleTodo, updateTodo, deleteTodo, updateTodoAssignee } =
+  await import('./todos');
 
 describe('createTodo', () => {
   const testTenantId = `tenant-${Date.now()}`;
@@ -123,6 +122,88 @@ describe('createTodo', () => {
 
     expect(result.errors?._form).toBeDefined();
     expect(result.errors?._form?.[0]).toContain('authenticated');
+  });
+
+  test('creates todo with valid assignee from same tenant', async () => {
+    // Create another user in the same tenant for assignment
+    const assigneeId = `assignee-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('title', 'Todo with assignee');
+    formData.set('assigneeId', assigneeId);
+
+    const result = await createTodo({} as CreateTodoState, formData);
+
+    expect(result.errors).toBeUndefined();
+
+    const todo = await prisma.todo.findFirst({
+      where: { tenantId: testTenantId, title: 'Todo with assignee' },
+    });
+
+    expect(todo?.assigneeId).toBe(assigneeId);
+  });
+
+  test('returns error for assignee from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a user
+    const otherTenantId = `tenant-other-create-${Date.now()}`;
+    const otherUserId = `user-other-create-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `other-create-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'MEMBER',
+          },
+        },
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('title', 'Todo with invalid assignee');
+    formData.set('assigneeId', otherUserId);
+
+    const result = await createTodo({} as CreateTodoState, formData);
+
+    expect(result.errors?.assigneeId).toBeDefined();
+    expect(result.errors?.assigneeId?.[0]).toContain('Invalid assignee');
+
+    // Verify todo was not created
+    const todo = await prisma.todo.findFirst({
+      where: { tenantId: testTenantId, title: 'Todo with invalid assignee' },
+    });
+    expect(todo).toBeNull();
+
+    // Cleanup
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('creates todo without assignee (defaults to null)', async () => {
+    const formData = new FormData();
+    formData.set('title', 'Todo without assignee');
+
+    const result = await createTodo({} as CreateTodoState, formData);
+
+    expect(result.errors).toBeUndefined();
+
+    const todo = await prisma.todo.findFirst({
+      where: { tenantId: testTenantId, title: 'Todo without assignee' },
+    });
+
+    expect(todo?.assigneeId).toBeNull();
   });
 });
 
@@ -413,6 +494,102 @@ describe('updateTodo', () => {
     await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
   });
+
+  test('updates todo with valid assignee from same tenant', async () => {
+    // Create another user in the same tenant for assignment
+    const assigneeId = `assignee-update-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-update-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Updated title with assignee');
+    formData.set('assigneeId', assigneeId);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.errors).toBeUndefined();
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBe(assigneeId);
+  });
+
+  test('returns error for assignee from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a user
+    const otherTenantIdAssign = `tenant-other-assign-${Date.now()}`;
+    const otherUserIdAssign = `user-other-assign-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantIdAssign,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserIdAssign,
+            email: `other-assign-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'MEMBER',
+          },
+        },
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Updated title');
+    formData.set('assigneeId', otherUserIdAssign);
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.errors?.assigneeId).toBeDefined();
+    expect(result.errors?.assigneeId?.[0]).toContain('Invalid assignee');
+
+    // Verify todo was not updated with invalid assignee
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBeNull();
+
+    // Cleanup
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantIdAssign } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantIdAssign } });
+  });
+
+  test('clears assignee when assigneeId not provided', async () => {
+    // First, assign someone to the todo
+    const assigneeId = `assignee-clear-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-clear-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    // Now update without assigneeId to clear it
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Updated title');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.errors).toBeUndefined();
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBeNull();
+  });
 });
 
 describe('deleteTodo', () => {
@@ -530,5 +707,187 @@ describe('deleteTodo', () => {
     await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+});
+
+describe('updateTodoAssignee', () => {
+  const testTenantId = `tenant-assignee-${Date.now()}`;
+  const testUserId = `user-assignee-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-assignee-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for assignee test',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('assigns valid user from same tenant', async () => {
+    // Create another user in the same tenant
+    const assigneeId = `assignee-quick-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-quick-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, assigneeId);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBe(assigneeId);
+  });
+
+  test('unassigns todo when assigneeId is null', async () => {
+    // First assign someone
+    const assigneeId = `assignee-unassign-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-unassign-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { assigneeId },
+    });
+
+    // Now unassign
+    const result = await updateTodoAssignee(testTodoId, null);
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await updateTodoAssignee(testTodoId, 'some-user-id');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+  });
+
+  test('returns error for assignee from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a user
+    const otherTenantId = `tenant-other-quick-${Date.now()}`;
+    const otherUserId = `user-other-quick-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `other-quick-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'MEMBER',
+          },
+        },
+      },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, otherUserId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('Invalid assignee');
+
+    // Verify todo was not updated
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.assigneeId).toBeNull();
+
+    // Cleanup
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-other-todo-${Date.now()}`;
+    const otherUserId = `user-other-todo-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `other-todo-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to assign someone to the other tenant's todo
+    const result = await updateTodoAssignee(otherTodo.id, testUserId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await updateTodoAssignee('non-existent-todo', testUserId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
   });
 });
