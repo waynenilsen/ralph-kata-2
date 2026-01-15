@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
+import { updateTodoLabels } from '@/app/actions/labels';
 import { type UpdateTodoState, updateTodo } from '@/app/actions/todos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CommentSection } from './comment-section';
+import { LabelSelector } from './label-selector';
 
 type EditTodoFormProps = {
   todo: {
@@ -27,8 +29,16 @@ type EditTodoFormProps = {
       createdAt: Date;
       author: { id: string; email: string };
     }[];
+    labels: {
+      label: {
+        id: string;
+        name: string;
+        color: string;
+      };
+    }[];
   };
   members: { id: string; email: string }[];
+  labels: { id: string; name: string; color: string }[];
   onCancel: () => void;
   onSuccess: () => void;
 };
@@ -39,17 +49,29 @@ const UNASSIGNED_VALUE = 'unassigned';
 export function EditTodoForm({
   todo,
   members,
+  labels,
   onCancel,
   onSuccess,
 }: EditTodoFormProps) {
   const [state, formAction, pending] = useActionState(updateTodo, initialState);
+  const [isLabelPending, startLabelTransition] = useTransition();
   // Use UNASSIGNED_VALUE for UI when there's no assigneeId
   const [assigneeId, setAssigneeId] = useState(
     todo.assigneeId ?? UNASSIGNED_VALUE,
   );
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>(
+    todo.labels.map((tl) => tl.label.id),
+  );
 
   // Convert the UI value to the actual form value (empty string for unassigned)
   const actualAssigneeId = assigneeId === UNASSIGNED_VALUE ? '' : assigneeId;
+
+  const handleLabelSelectionChange = (newLabelIds: string[]) => {
+    setSelectedLabelIds(newLabelIds);
+    startLabelTransition(async () => {
+      await updateTodoLabels(todo.id, newLabelIds);
+    });
+  };
 
   useEffect(() => {
     if (state.success) {
@@ -147,6 +169,16 @@ export function EditTodoForm({
               {state.errors.assigneeId.join(', ')}
             </p>
           )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label>Labels (optional)</Label>
+          <LabelSelector
+            labels={labels}
+            selectedIds={selectedLabelIds}
+            onSelectionChange={handleLabelSelectionChange}
+            disabled={pending || isLabelPending}
+          />
         </div>
 
         <div className="flex gap-2">

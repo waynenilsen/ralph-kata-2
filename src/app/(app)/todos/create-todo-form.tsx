@@ -13,18 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { LabelSelector } from './label-selector';
 
 type CreateTodoFormProps = {
   members: { id: string; email: string }[];
+  labels: { id: string; name: string; color: string }[];
 };
 
 const initialState: CreateTodoState = {};
 
 const UNASSIGNED_VALUE = 'unassigned';
 
-export function CreateTodoForm({ members }: CreateTodoFormProps) {
+export function CreateTodoForm({ members, labels }: CreateTodoFormProps) {
   const [state, formAction, pending] = useActionState(createTodo, initialState);
   const [assigneeId, setAssigneeId] = useState(UNASSIGNED_VALUE);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
 
   // Convert the UI value to the actual form value (empty string for unassigned)
   const actualAssigneeId = assigneeId === UNASSIGNED_VALUE ? '' : assigneeId;
@@ -114,6 +117,21 @@ export function CreateTodoForm({ members }: CreateTodoFormProps) {
                 {state.errors.assigneeId.join(', ')}
               </p>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Labels (optional)</Label>
+            <input
+              type="hidden"
+              name="labelIds"
+              value={selectedLabelIds.join(',')}
+            />
+            <LabelSelector
+              labels={labels}
+              selectedIds={selectedLabelIds}
+              onSelectionChange={setSelectedLabelIds}
+              disabled={pending}
+            />
           </div>
 
           <Button type="submit" disabled={pending}>

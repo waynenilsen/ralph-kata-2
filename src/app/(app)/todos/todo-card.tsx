@@ -45,9 +45,10 @@ type TodoCardProps = {
     }[];
   };
   members: { id: string; email: string }[];
+  labels: { id: string; name: string; color: string }[];
 };
 
-export function TodoCard({ todo, members }: TodoCardProps) {
+export function TodoCard({ todo, members, labels }: TodoCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -73,6 +74,7 @@ export function TodoCard({ todo, members }: TodoCardProps) {
           <EditTodoForm
             todo={todo}
             members={members}
+            labels={labels}
             onCancel={() => setIsEditing(false)}
             onSuccess={() => setIsEditing(false)}
           />

@@ -10,6 +10,7 @@ const createTodoSchema = z.object({
   description: z.string().optional(),
   dueDate: z.string().optional(),
   assigneeId: z.string().optional(),
+  labelIds: z.string().optional(),
 });
 
 const updateTodoSchema = z.object({
@@ -61,6 +62,7 @@ export async function createTodo(
     description: formData.get('description') || undefined,
     dueDate: formData.get('dueDate') || undefined,
     assigneeId: formData.get('assigneeId') || undefined,
+    labelIds: formData.get('labelIds') || undefined,
   };
 
   const result = createTodoSchema.safeParse(rawData);
@@ -71,7 +73,7 @@ export async function createTodo(
     };
   }
 
-  const { title, description, dueDate, assigneeId } = result.data;
+  const { title, description, dueDate, assigneeId, labelIds } = result.data;
 
   // Validate assignee belongs to same tenant (IDOR prevention)
   if (assigneeId) {
@@ -87,6 +89,27 @@ export async function createTodo(
     }
   }
 
+  // Parse and validate label IDs
+  const parsedLabelIds = labelIds
+    ? labelIds.split(',').filter((id) => id.trim())
+    : [];
+
+  if (parsedLabelIds.length > 0) {
+    const validLabels = await prisma.label.findMany({
+      where: {
+        id: { in: parsedLabelIds },
+        tenantId: session.tenantId,
+      },
+    });
+    if (validLabels.length !== parsedLabelIds.length) {
+      return {
+        errors: {
+          _form: ['Invalid labels'],
+        },
+      };
+    }
+  }
+
   await prisma.todo.create({
     data: {
       title,
@@ -95,6 +118,14 @@ export async function createTodo(
       assigneeId: assigneeId || undefined,
       tenantId: session.tenantId,
       createdById: session.userId,
+      labels:
+        parsedLabelIds.length > 0
+          ? {
+              create: parsedLabelIds.map((labelId) => ({
+                labelId,
+              })),
+            }
+          : undefined,
     },
   });
 

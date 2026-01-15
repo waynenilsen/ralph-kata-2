@@ -31,6 +31,10 @@ const baseTodo = {
 };
 
 const members = [{ id: '1', email: 'test@example.com' }];
+const labels = [
+  { id: 'l1', name: 'Bug', color: '#ef4444' },
+  { id: 'l2', name: 'Feature', color: '#22c55e' },
+];
 
 describe('TodoCard', () => {
   describe('comment count display', () => {
@@ -38,6 +42,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, _count: { comments: 0 } },
         members,
+        labels,
       });
 
       // Traverse the JSX tree to find the CardContent
@@ -57,6 +62,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, _count: { comments: 5 } },
         members,
+        labels,
       });
 
       // Traverse the JSX tree to find the CardContent
@@ -77,6 +83,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, _count: { comments: 1 } },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -92,6 +99,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, _count: { comments: 3 } },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -112,6 +120,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, labels: [] },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -132,6 +141,7 @@ describe('TodoCard', () => {
           ],
         },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -154,6 +164,7 @@ describe('TodoCard', () => {
           ],
         },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -182,6 +193,7 @@ describe('TodoCard', () => {
           ],
         },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -224,6 +236,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, title: 'My Test Todo' },
         members,
+        labels,
       });
 
       const cardHeader = result?.props?.children?.[0];
@@ -237,6 +250,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, description: 'My description' },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -253,6 +267,7 @@ describe('TodoCard', () => {
           assignee: { email: 'assigned@example.com' },
         },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];
@@ -267,6 +282,7 @@ describe('TodoCard', () => {
       const result = TodoCard({
         todo: { ...baseTodo, assigneeId: null, assignee: null },
         members,
+        labels,
       });
 
       const cardContent = result?.props?.children?.[1];

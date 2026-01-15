@@ -41,7 +41,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
   );
   const where = { ...baseWhere, ...assigneeWhere };
 
-  const [todos, totalCount, user, members] = await Promise.all([
+  const [todos, totalCount, user, members, labels] = await Promise.all([
     prisma.todo.findMany({
       where,
       orderBy,
@@ -71,6 +71,11 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       select: { id: true, email: true },
       orderBy: { email: 'asc' },
     }),
+    prisma.label.findMany({
+      where: { tenantId: session.tenantId },
+      select: { id: true, name: true, color: true },
+      orderBy: { name: 'asc' },
+    }),
   ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -83,7 +88,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
 
       {isAdmin && <InviteForm />}
 
-      <CreateTodoForm members={members} />
+      <CreateTodoForm members={members} labels={labels} />
 
       <Suspense fallback={null}>
         <TodoFilters members={members} />
@@ -100,7 +105,12 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       ) : (
         <div className="space-y-4">
           {todos.map((todo) => (
-            <TodoCard key={todo.id} todo={todo} members={members} />
+            <TodoCard
+              key={todo.id}
+              todo={todo}
+              members={members}
+              labels={labels}
+            />
           ))}
         </div>
       )}
