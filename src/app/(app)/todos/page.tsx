@@ -3,7 +3,12 @@ import { Suspense } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
-import { buildPrismaQuery, PAGE_SIZE, parseFilters } from '@/lib/todo-filters';
+import {
+  buildAssigneeWhereClause,
+  buildPrismaQuery,
+  PAGE_SIZE,
+  parseFilters,
+} from '@/lib/todo-filters';
 import { CreateTodoForm } from './create-todo-form';
 import { InviteForm } from './invite-form';
 import { TodoCard } from './todo-card';
@@ -22,10 +27,19 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
   }
 
   const filters = parseFilters(await searchParams);
-  const { where, orderBy, skip, take } = buildPrismaQuery(
-    filters,
-    session.tenantId,
+  const {
+    where: baseWhere,
+    orderBy,
+    skip,
+    take,
+  } = buildPrismaQuery(filters, session.tenantId);
+
+  // Apply assignee filter
+  const assigneeWhere = buildAssigneeWhereClause(
+    filters.assignee,
+    session.userId,
   );
+  const where = { ...baseWhere, ...assigneeWhere };
 
   const [todos, totalCount, user, members] = await Promise.all([
     prisma.todo.findMany({

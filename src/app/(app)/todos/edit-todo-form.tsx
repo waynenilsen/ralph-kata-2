@@ -27,6 +27,7 @@ type EditTodoFormProps = {
 };
 
 const initialState: UpdateTodoState = {};
+const UNASSIGNED_VALUE = 'unassigned';
 
 export function EditTodoForm({
   todo,
@@ -35,7 +36,13 @@ export function EditTodoForm({
   onSuccess,
 }: EditTodoFormProps) {
   const [state, formAction, pending] = useActionState(updateTodo, initialState);
-  const [assigneeId, setAssigneeId] = useState(todo.assigneeId ?? '');
+  // Use UNASSIGNED_VALUE for UI when there's no assigneeId
+  const [assigneeId, setAssigneeId] = useState(
+    todo.assigneeId ?? UNASSIGNED_VALUE,
+  );
+
+  // Convert the UI value to the actual form value (empty string for unassigned)
+  const actualAssigneeId = assigneeId === UNASSIGNED_VALUE ? '' : assigneeId;
 
   useEffect(() => {
     if (state.success) {
@@ -108,7 +115,7 @@ export function EditTodoForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor={`assigneeId-${todo.id}`}>Assignee (optional)</Label>
-        <input type="hidden" name="assigneeId" value={assigneeId} />
+        <input type="hidden" name="assigneeId" value={actualAssigneeId} />
         <Select value={assigneeId} onValueChange={setAssigneeId}>
           <SelectTrigger
             id={`assigneeId-${todo.id}`}
@@ -117,7 +124,7 @@ export function EditTodoForm({
             <SelectValue placeholder="Unassigned" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Unassigned</SelectItem>
+            <SelectItem value={UNASSIGNED_VALUE}>Unassigned</SelectItem>
             {members.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.email}

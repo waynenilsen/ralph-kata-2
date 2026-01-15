@@ -20,9 +20,14 @@ type CreateTodoFormProps = {
 
 const initialState: CreateTodoState = {};
 
+const UNASSIGNED_VALUE = 'unassigned';
+
 export function CreateTodoForm({ members }: CreateTodoFormProps) {
   const [state, formAction, pending] = useActionState(createTodo, initialState);
-  const [assigneeId, setAssigneeId] = useState('');
+  const [assigneeId, setAssigneeId] = useState(UNASSIGNED_VALUE);
+
+  // Convert the UI value to the actual form value (empty string for unassigned)
+  const actualAssigneeId = assigneeId === UNASSIGNED_VALUE ? '' : assigneeId;
 
   return (
     <Card className="mb-6">
@@ -87,7 +92,7 @@ export function CreateTodoForm({ members }: CreateTodoFormProps) {
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="assigneeId">Assignee (optional)</Label>
-            <input type="hidden" name="assigneeId" value={assigneeId} />
+            <input type="hidden" name="assigneeId" value={actualAssigneeId} />
             <Select value={assigneeId} onValueChange={setAssigneeId}>
               <SelectTrigger
                 id="assigneeId"
@@ -96,7 +101,7 @@ export function CreateTodoForm({ members }: CreateTodoFormProps) {
                 <SelectValue placeholder="Unassigned" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
+                <SelectItem value={UNASSIGNED_VALUE}>Unassigned</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.email}
