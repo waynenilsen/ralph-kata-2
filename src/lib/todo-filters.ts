@@ -12,6 +12,7 @@ export const filterSchema = z.object({
     .default('created-desc'),
   page: z.coerce.number().int().positive().default(1),
   assignee: z.string().default('all'),
+  label: z.string().default('all'),
 });
 
 export type TodoFilters = z.infer<typeof filterSchema>;
@@ -31,12 +32,16 @@ export function parseFilters(
   const assignee = Array.isArray(searchParams.assignee)
     ? searchParams.assignee[0]
     : searchParams.assignee;
+  const label = Array.isArray(searchParams.label)
+    ? searchParams.label[0]
+    : searchParams.label;
 
   const result = filterSchema.safeParse({
     status,
     sort,
     page,
     assignee,
+    label,
   });
   return result.success ? result.data : filterSchema.parse({});
 }
@@ -84,4 +89,13 @@ export function buildAssigneeWhereClause(
     default:
       return { assigneeId: assignee };
   }
+}
+
+export function buildLabelWhereClause(label: string): {
+  labels?: { some: { labelId: string } };
+} {
+  if (label === 'all') {
+    return {};
+  }
+  return { labels: { some: { labelId: label } } };
 }

@@ -14,8 +14,15 @@ interface Member {
   email: string;
 }
 
+interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface TodoFiltersProps {
   members: Member[];
+  labels: Label[];
 }
 
 const STATUS_OPTIONS = [
@@ -35,22 +42,30 @@ const SORT_OPTIONS = [
  * Filter controls component for filtering and sorting todos.
  * Updates URL search params when filter/sort selection changes.
  */
-export function TodoFilters({ members }: TodoFiltersProps) {
+export function TodoFilters({ members, labels }: TodoFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const currentStatus = searchParams.get('status') || 'all';
   const currentSort = searchParams.get('sort') || 'created-desc';
   const currentAssignee = searchParams.get('assignee') || 'all';
+  const currentLabel = searchParams.get('label') || 'all';
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === 'all' && (key === 'status' || key === 'assignee')) {
+    if (
+      value === 'all' &&
+      (key === 'status' || key === 'assignee' || key === 'label')
+    ) {
       params.delete(key);
+      params.delete('page');
     } else if (value === 'created-desc' && key === 'sort') {
       params.delete(key);
     } else {
       params.set(key, value);
+      if (key !== 'sort') {
+        params.delete('page');
+      }
     }
     const queryString = params.toString();
     router.push(queryString ? `/todos?${queryString}` : '/todos');
@@ -88,6 +103,29 @@ export function TodoFilters({ members }: TodoFiltersProps) {
           {members.map((member) => (
             <SelectItem key={member.id} value={member.id}>
               {member.email}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={currentLabel}
+        onValueChange={(v) => updateFilter('label', v)}
+      >
+        <SelectTrigger className="w-[180px]" data-testid="label-filter">
+          <SelectValue placeholder="All labels" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All labels</SelectItem>
+          {labels.map((label) => (
+            <SelectItem key={label.id} value={label.id}>
+              <span className="flex items-center gap-2">
+                <span
+                  className="w-3 h-3 rounded-full inline-block"
+                  style={{ backgroundColor: label.color }}
+                />
+                {label.name}
+              </span>
             </SelectItem>
           ))}
         </SelectContent>

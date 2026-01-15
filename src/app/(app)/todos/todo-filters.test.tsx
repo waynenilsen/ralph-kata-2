@@ -18,6 +18,11 @@ const testMembers = [
   { id: 'user-2', email: 'bob@example.com' },
 ];
 
+const testLabels = [
+  { id: 'label-1', name: 'Bug', color: '#ff0000' },
+  { id: 'label-2', name: 'Feature', color: '#00ff00' },
+];
+
 describe('TodoFilters', () => {
   beforeEach(() => {
     mockPush.mockClear();
@@ -25,17 +30,17 @@ describe('TodoFilters', () => {
   });
 
   describe('rendering', () => {
-    test('renders all three select dropdowns', () => {
-      const result = TodoFilters({ members: testMembers });
+    test('renders all four select dropdowns', () => {
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       expect(result).not.toBeNull();
-      // Should have a flex div with 3 Select children
+      // Should have a flex div with 4 Select children
       const children = result?.props?.children;
-      expect(children).toHaveLength(3);
+      expect(children).toHaveLength(4);
     });
 
     test('renders status dropdown with correct options', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const statusSelect = result?.props?.children?.[0];
       const selectContent = statusSelect?.props?.children?.[1];
@@ -48,7 +53,7 @@ describe('TodoFilters', () => {
     });
 
     test('renders assignee dropdown with static options and members', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const selectContent = assigneeSelect?.props?.children?.[1];
@@ -71,10 +76,28 @@ describe('TodoFilters', () => {
       expect(memberOptions[1]?.props?.children).toBe('bob@example.com');
     });
 
-    test('renders sort dropdown with correct options', () => {
-      const result = TodoFilters({ members: testMembers });
+    test('renders label dropdown with all labels option and tenant labels', () => {
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[2];
+      const selectContent = labelSelect?.props?.children?.[1];
+      const children = selectContent?.props?.children;
+
+      // First is "All labels" option
+      expect(children[0]?.props?.value).toBe('all');
+      expect(children[0]?.props?.children).toBe('All labels');
+
+      // Remaining are label options (mapped array)
+      const labelOptions = children[1];
+      expect(labelOptions).toHaveLength(2);
+      expect(labelOptions[0]?.props?.value).toBe('label-1');
+      expect(labelOptions[1]?.props?.value).toBe('label-2');
+    });
+
+    test('renders sort dropdown with correct options', () => {
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
+
+      const sortSelect = result?.props?.children?.[3];
       const selectContent = sortSelect?.props?.children?.[1];
       const options = selectContent?.props?.children;
 
@@ -86,7 +109,7 @@ describe('TodoFilters', () => {
     });
 
     test('renders with empty members array', () => {
-      const result = TodoFilters({ members: [] });
+      const result = TodoFilters({ members: [], labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const selectContent = assigneeSelect?.props?.children?.[1];
@@ -99,25 +122,40 @@ describe('TodoFilters', () => {
       // Member options should be empty array
       expect(children[3]).toHaveLength(0);
     });
+
+    test('renders with empty labels array', () => {
+      const result = TodoFilters({ members: testMembers, labels: [] });
+
+      const labelSelect = result?.props?.children?.[2];
+      const selectContent = labelSelect?.props?.children?.[1];
+      const children = selectContent?.props?.children;
+
+      // Should still have "All labels" option
+      expect(children[0]?.props?.value).toBe('all');
+      // Label options should be empty array
+      expect(children[1]).toHaveLength(0);
+    });
   });
 
   describe('current values from URL', () => {
     test('uses default values when URL has no params', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const statusSelect = result?.props?.children?.[0];
       const assigneeSelect = result?.props?.children?.[1];
-      const sortSelect = result?.props?.children?.[2];
+      const labelSelect = result?.props?.children?.[2];
+      const sortSelect = result?.props?.children?.[3];
 
       expect(statusSelect?.props?.value).toBe('all');
       expect(assigneeSelect?.props?.value).toBe('all');
+      expect(labelSelect?.props?.value).toBe('all');
       expect(sortSelect?.props?.value).toBe('created-desc');
     });
 
     test('reads status from URL params', () => {
       mockSearchParams = new URLSearchParams('status=pending');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const statusSelect = result?.props?.children?.[0];
       expect(statusSelect?.props?.value).toBe('pending');
@@ -126,7 +164,7 @@ describe('TodoFilters', () => {
     test('reads assignee from URL params', () => {
       mockSearchParams = new URLSearchParams('assignee=me');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       expect(assigneeSelect?.props?.value).toBe('me');
@@ -135,25 +173,36 @@ describe('TodoFilters', () => {
     test('reads user id assignee from URL params', () => {
       mockSearchParams = new URLSearchParams('assignee=user-1');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       expect(assigneeSelect?.props?.value).toBe('user-1');
     });
 
+    test('reads label from URL params', () => {
+      mockSearchParams = new URLSearchParams('label=label-1');
+
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
+
+      const labelSelect = result?.props?.children?.[2];
+      expect(labelSelect?.props?.value).toBe('label-1');
+    });
+
     test('reads sort from URL params', () => {
       mockSearchParams = new URLSearchParams('sort=due-asc');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[2];
+      const sortSelect = result?.props?.children?.[3];
       expect(sortSelect?.props?.value).toBe('due-asc');
     });
   });
 
   describe('updateFilter behavior via onValueChange', () => {
-    test('status change to pending updates URL', () => {
-      const result = TodoFilters({ members: testMembers });
+    test('status change to pending updates URL and resets page', () => {
+      mockSearchParams = new URLSearchParams('page=2');
+
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const statusSelect = result?.props?.children?.[0];
       const onValueChange = statusSelect?.props?.onValueChange;
@@ -165,7 +214,7 @@ describe('TodoFilters', () => {
     test('status change to all removes status param', () => {
       mockSearchParams = new URLSearchParams('status=pending');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const statusSelect = result?.props?.children?.[0];
       const onValueChange = statusSelect?.props?.onValueChange;
@@ -175,7 +224,7 @@ describe('TodoFilters', () => {
     });
 
     test('assignee change to me updates URL', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const onValueChange = assigneeSelect?.props?.onValueChange;
@@ -185,7 +234,7 @@ describe('TodoFilters', () => {
     });
 
     test('assignee change to unassigned updates URL', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const onValueChange = assigneeSelect?.props?.onValueChange;
@@ -195,7 +244,7 @@ describe('TodoFilters', () => {
     });
 
     test('assignee change to specific user id updates URL', () => {
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const onValueChange = assigneeSelect?.props?.onValueChange;
@@ -207,7 +256,7 @@ describe('TodoFilters', () => {
     test('assignee change to all removes assignee param', () => {
       mockSearchParams = new URLSearchParams('assignee=me');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
       const assigneeSelect = result?.props?.children?.[1];
       const onValueChange = assigneeSelect?.props?.onValueChange;
@@ -216,10 +265,34 @@ describe('TodoFilters', () => {
       expect(mockPush).toHaveBeenCalledWith('/todos');
     });
 
-    test('sort change to due-asc updates URL', () => {
-      const result = TodoFilters({ members: testMembers });
+    test('label change to specific label updates URL and resets page', () => {
+      mockSearchParams = new URLSearchParams('page=2');
 
-      const sortSelect = result?.props?.children?.[2];
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
+
+      const labelSelect = result?.props?.children?.[2];
+      const onValueChange = labelSelect?.props?.onValueChange;
+      onValueChange('label-1');
+
+      expect(mockPush).toHaveBeenCalledWith('/todos?label=label-1');
+    });
+
+    test('label change to all removes label param', () => {
+      mockSearchParams = new URLSearchParams('label=label-1');
+
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
+
+      const labelSelect = result?.props?.children?.[2];
+      const onValueChange = labelSelect?.props?.onValueChange;
+      onValueChange('all');
+
+      expect(mockPush).toHaveBeenCalledWith('/todos');
+    });
+
+    test('sort change to due-asc updates URL', () => {
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
+
+      const sortSelect = result?.props?.children?.[3];
       const onValueChange = sortSelect?.props?.onValueChange;
       onValueChange('due-asc');
 
@@ -229,9 +302,9 @@ describe('TodoFilters', () => {
     test('sort change to created-desc removes sort param', () => {
       mockSearchParams = new URLSearchParams('sort=due-asc');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const sortSelect = result?.props?.children?.[2];
+      const sortSelect = result?.props?.children?.[3];
       const onValueChange = sortSelect?.props?.onValueChange;
       onValueChange('created-desc');
 
@@ -241,26 +314,26 @@ describe('TodoFilters', () => {
     test('preserves other params when updating', () => {
       mockSearchParams = new URLSearchParams('status=pending&sort=due-asc');
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
-      const onValueChange = assigneeSelect?.props?.onValueChange;
-      onValueChange('me');
+      const labelSelect = result?.props?.children?.[2];
+      const onValueChange = labelSelect?.props?.onValueChange;
+      onValueChange('label-1');
 
       expect(mockPush).toHaveBeenCalledWith(
-        '/todos?status=pending&sort=due-asc&assignee=me',
+        '/todos?status=pending&sort=due-asc&label=label-1',
       );
     });
 
     test('removes param correctly while preserving others', () => {
       mockSearchParams = new URLSearchParams(
-        'status=pending&assignee=me&sort=due-asc',
+        'status=pending&label=label-1&sort=due-asc',
       );
 
-      const result = TodoFilters({ members: testMembers });
+      const result = TodoFilters({ members: testMembers, labels: testLabels });
 
-      const assigneeSelect = result?.props?.children?.[1];
-      const onValueChange = assigneeSelect?.props?.onValueChange;
+      const labelSelect = result?.props?.children?.[2];
+      const onValueChange = labelSelect?.props?.onValueChange;
       onValueChange('all');
 
       expect(mockPush).toHaveBeenCalledWith(

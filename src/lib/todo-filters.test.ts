@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildAssigneeWhereClause,
+  buildLabelWhereClause,
   buildPrismaQuery,
   filterSchema,
   PAGE_SIZE,
@@ -14,13 +15,14 @@ describe('PAGE_SIZE', () => {
 });
 
 describe('filterSchema', () => {
-  test('has default values for status, sort, page, and assignee', () => {
+  test('has default values for status, sort, page, assignee, and label', () => {
     const result = filterSchema.parse({});
 
     expect(result.status).toBe('all');
     expect(result.sort).toBe('created-desc');
     expect(result.page).toBe(1);
     expect(result.assignee).toBe('all');
+    expect(result.label).toBe('all');
   });
 
   test('accepts valid status values', () => {
@@ -90,6 +92,17 @@ describe('filterSchema', () => {
       'some-uuid-value',
     );
   });
+
+  test('accepts valid label values', () => {
+    expect(filterSchema.parse({ label: 'all' }).label).toBe('all');
+  });
+
+  test('accepts labelId as label value', () => {
+    expect(filterSchema.parse({ label: 'label-123' }).label).toBe('label-123');
+    expect(filterSchema.parse({ label: 'some-uuid-value' }).label).toBe(
+      'some-uuid-value',
+    );
+  });
 });
 
 describe('parseFilters', () => {
@@ -100,6 +113,7 @@ describe('parseFilters', () => {
     expect(result.sort).toBe('created-desc');
     expect(result.page).toBe(1);
     expect(result.assignee).toBe('all');
+    expect(result.label).toBe('all');
   });
 
   test('parses valid status parameter', () => {
@@ -197,6 +211,26 @@ describe('parseFilters', () => {
     const result = parseFilters({ assignee: ['me', 'unassigned'] });
 
     expect(result.assignee).toBe('me');
+  });
+
+  test('parses valid label parameter', () => {
+    expect(parseFilters({ label: 'all' }).label).toBe('all');
+  });
+
+  test('parses labelId label parameter', () => {
+    expect(parseFilters({ label: 'label-123' }).label).toBe('label-123');
+  });
+
+  test('handles undefined label value', () => {
+    const result = parseFilters({ label: undefined });
+
+    expect(result.label).toBe('all');
+  });
+
+  test('handles array label values by taking first element', () => {
+    const result = parseFilters({ label: ['label-1', 'label-2'] });
+
+    expect(result.label).toBe('label-1');
   });
 });
 
@@ -363,5 +397,26 @@ describe('buildAssigneeWhereClause', () => {
     const result = buildAssigneeWhereClause(uuid, currentUserId);
 
     expect(result).toEqual({ assigneeId: uuid });
+  });
+});
+
+describe('buildLabelWhereClause', () => {
+  test('returns empty object for label all', () => {
+    const result = buildLabelWhereClause('all');
+
+    expect(result).toEqual({});
+  });
+
+  test('returns labels.some filter for specific labelId', () => {
+    const result = buildLabelWhereClause('label-123');
+
+    expect(result).toEqual({ labels: { some: { labelId: 'label-123' } } });
+  });
+
+  test('handles UUID-style label values', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+    const result = buildLabelWhereClause(uuid);
+
+    expect(result).toEqual({ labels: { some: { labelId: uuid } } });
   });
 });

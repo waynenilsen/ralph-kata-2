@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import {
   buildAssigneeWhereClause,
+  buildLabelWhereClause,
   buildPrismaQuery,
   PAGE_SIZE,
   parseFilters,
@@ -39,7 +40,9 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
     filters.assignee,
     session.userId,
   );
-  const where = { ...baseWhere, ...assigneeWhere };
+  // Apply label filter
+  const labelWhere = buildLabelWhereClause(filters.label);
+  const where = { ...baseWhere, ...assigneeWhere, ...labelWhere };
 
   const [todos, totalCount, user, members, labels] = await Promise.all([
     prisma.todo.findMany({
@@ -91,7 +94,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       <CreateTodoForm members={members} labels={labels} />
 
       <Suspense fallback={null}>
-        <TodoFilters members={members} />
+        <TodoFilters members={members} labels={labels} />
       </Suspense>
 
       {todos.length === 0 ? (
