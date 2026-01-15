@@ -1,16 +1,28 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { type CreateTodoState, createTodo } from '@/app/actions/todos';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+type CreateTodoFormProps = {
+  members: { id: string; email: string }[];
+};
 
 const initialState: CreateTodoState = {};
 
-export function CreateTodoForm() {
+export function CreateTodoForm({ members }: CreateTodoFormProps) {
   const [state, formAction, pending] = useActionState(createTodo, initialState);
+  const [assigneeId, setAssigneeId] = useState('');
 
   return (
     <Card className="mb-6">
@@ -69,6 +81,32 @@ export function CreateTodoForm() {
             {state.errors?.dueDate && (
               <p className="text-sm text-destructive">
                 {state.errors.dueDate.join(', ')}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="assigneeId">Assignee (optional)</Label>
+            <input type="hidden" name="assigneeId" value={assigneeId} />
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger
+                id="assigneeId"
+                aria-invalid={!!state.errors?.assigneeId}
+              >
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {state.errors?.assigneeId && (
+              <p className="text-sm text-destructive">
+                {state.errors.assigneeId.join(', ')}
               </p>
             )}
           </div>

@@ -27,7 +27,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
     session.tenantId,
   );
 
-  const [todos, totalCount, user] = await Promise.all([
+  const [todos, totalCount, user, members] = await Promise.all([
     prisma.todo.findMany({
       where,
       orderBy,
@@ -38,6 +38,11 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
     prisma.user.findUnique({
       where: { id: session.userId },
       select: { role: true },
+    }),
+    prisma.user.findMany({
+      where: { tenantId: session.tenantId },
+      select: { id: true, email: true },
+      orderBy: { email: 'asc' },
     }),
   ]);
 
@@ -51,7 +56,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
 
       {isAdmin && <InviteForm />}
 
-      <CreateTodoForm />
+      <CreateTodoForm members={members} />
 
       <Suspense fallback={null}>
         <TodoFilters />
