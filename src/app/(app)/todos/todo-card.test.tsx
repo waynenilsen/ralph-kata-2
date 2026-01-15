@@ -12,6 +12,7 @@ mock.module('@/app/actions/todos', () => ({
   deleteTodo: mock(() => Promise.resolve()),
   toggleTodo: mock(() => Promise.resolve()),
   updateTodo: mock(() => Promise.resolve()),
+  updateTodoRecurrence: mock(() => Promise.resolve()),
 }));
 
 // Import after mocking
@@ -25,6 +26,7 @@ const baseTodo = {
   dueDate: null,
   assigneeId: null,
   assignee: null,
+  recurrenceType: 'NONE' as const,
   _count: { comments: 0 },
   comments: [],
   labels: [],
@@ -412,6 +414,164 @@ describe('TodoCard', () => {
       const cardContentChildren = cardContent?.props?.children;
       const assigneeParagraph = cardContentChildren?.[1];
       expect(assigneeParagraph?.props?.children).toBe('Unassigned');
+    });
+  });
+
+  describe('recurrence indicator display', () => {
+    test('does not show recurrence indicator when recurrenceType is NONE', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'NONE' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      // recurrence indicator would be at index 5 (after description, assignee, dueDate, labels, subtasks)
+      // But with all optional items empty/falsy, we need to check all elements for recurrence indicator
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeFalsy();
+    });
+
+    test('shows recurrence indicator with Repeat icon when recurrenceType is DAILY', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'DAILY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      // Find recurrence indicator div by data-testid
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeTruthy();
+
+      // Check for Repeat icon
+      const repeatIcon = recurrenceIndicator?.props?.children?.[0];
+      expect(repeatIcon).toBeTruthy();
+      expect(repeatIcon?.type?.displayName || repeatIcon?.type?.name).toBe(
+        'Repeat',
+      );
+
+      // Check label
+      const labelSpan = recurrenceIndicator?.props?.children?.[1];
+      expect(labelSpan?.props?.children).toBe('Daily');
+    });
+
+    test('shows Weekly label for WEEKLY recurrence', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'WEEKLY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeTruthy();
+
+      const labelSpan = recurrenceIndicator?.props?.children?.[1];
+      expect(labelSpan?.props?.children).toBe('Weekly');
+    });
+
+    test('shows Biweekly label for BIWEEKLY recurrence', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'BIWEEKLY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeTruthy();
+
+      const labelSpan = recurrenceIndicator?.props?.children?.[1];
+      expect(labelSpan?.props?.children).toBe('Biweekly');
+    });
+
+    test('shows Monthly label for MONTHLY recurrence', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'MONTHLY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeTruthy();
+
+      const labelSpan = recurrenceIndicator?.props?.children?.[1];
+      expect(labelSpan?.props?.children).toBe('Monthly');
+    });
+
+    test('shows Yearly label for YEARLY recurrence', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'YEARLY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+      expect(recurrenceIndicator).toBeTruthy();
+
+      const labelSpan = recurrenceIndicator?.props?.children?.[1];
+      expect(labelSpan?.props?.children).toBe('Yearly');
+    });
+
+    test('recurrence indicator has correct styling classes', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, recurrenceType: 'WEEKLY' as const },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const allChildrenArray = Array.isArray(cardContentChildren)
+        ? cardContentChildren.flat()
+        : [cardContentChildren];
+      const recurrenceIndicator = allChildrenArray.find(
+        (child) => child?.props?.['data-testid'] === 'recurrence-indicator',
+      );
+
+      expect(recurrenceIndicator?.props?.className).toContain('text-xs');
+      expect(recurrenceIndicator?.props?.className).toContain(
+        'text-muted-foreground',
+      );
     });
   });
 });

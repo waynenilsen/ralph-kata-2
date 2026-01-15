@@ -1,7 +1,7 @@
 'use client';
 
 import type { RecurrenceType } from '@prisma/client';
-import { CheckSquare, MessageSquare } from 'lucide-react';
+import { CheckSquare, MessageSquare, Repeat } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { deleteTodo, toggleTodo } from '@/app/actions/todos';
 import { LabelBadge } from '@/components/label-badge';
@@ -20,6 +20,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EditTodoForm } from './edit-todo-form';
+
+const recurrenceLabels: Record<RecurrenceType, string> = {
+  NONE: '',
+  DAILY: 'Daily',
+  WEEKLY: 'Weekly',
+  BIWEEKLY: 'Biweekly',
+  MONTHLY: 'Monthly',
+  YEARLY: 'Yearly',
+};
 
 type TodoCardProps = {
   todo: {
@@ -200,6 +209,15 @@ export function TodoCard({ todo, members, labels }: TodoCardProps) {
           <div className="flex items-center gap-1 text-muted-foreground text-xs mt-2">
             <MessageSquare className="h-3 w-3" />
             <span>{todo._count.comments}</span>
+          </div>
+        )}
+        {todo.recurrenceType !== 'NONE' && (
+          <div
+            className="flex items-center gap-1 text-muted-foreground text-xs mt-2"
+            data-testid="recurrence-indicator"
+          >
+            <Repeat className="h-3 w-3" />
+            <span>{recurrenceLabels[todo.recurrenceType]}</span>
           </div>
         )}
       </CardContent>
