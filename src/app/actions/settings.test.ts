@@ -11,7 +11,12 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { getUserProfile, changePassword } = await import('./settings');
+const {
+  getUserProfile,
+  changePassword,
+  getEmailReminderPreference,
+  updateEmailReminderPreference,
+} = await import('./settings');
 
 describe('getUserProfile', () => {
   const testTenantId = `tenant-settings-${Date.now()}`;
@@ -191,6 +196,162 @@ describe('changePassword', () => {
     );
 
     const result = await changePassword(originalPassword, 'new-password-456');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('User not found');
+  });
+});
+
+describe('getEmailReminderPreference', () => {
+  const testTenantId = `tenant-email-pref-${Date.now()}`;
+  const testUserId = `user-email-pref-${Date.now()}`;
+  const testEmail = `email-pref-${Date.now()}@example.com`;
+
+  beforeEach(async () => {
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Email Pref Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: testEmail,
+            passwordHash: 'hashed',
+            role: 'MEMBER',
+            emailRemindersEnabled: true,
+          },
+        },
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('returns email reminder preference when enabled', async () => {
+    const result = await getEmailReminderPreference();
+
+    expect(result.error).toBeUndefined();
+    expect(result.emailRemindersEnabled).toBe(true);
+  });
+
+  test('returns email reminder preference when disabled', async () => {
+    await prisma.user.update({
+      where: { id: testUserId },
+      data: { emailRemindersEnabled: false },
+    });
+
+    const result = await getEmailReminderPreference();
+
+    expect(result.error).toBeUndefined();
+    expect(result.emailRemindersEnabled).toBe(false);
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await getEmailReminderPreference();
+
+    expect(result.error).toBe('Not authenticated');
+    expect(result.emailRemindersEnabled).toBeUndefined();
+  });
+
+  test('returns error when user not found', async () => {
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: 'nonexistent-user', tenantId: testTenantId }),
+    );
+
+    const result = await getEmailReminderPreference();
+
+    expect(result.error).toBe('User not found');
+    expect(result.emailRemindersEnabled).toBeUndefined();
+  });
+});
+
+describe('updateEmailReminderPreference', () => {
+  const testTenantId = `tenant-update-email-${Date.now()}`;
+  const testUserId = `user-update-email-${Date.now()}`;
+  const testEmail = `update-email-${Date.now()}@example.com`;
+
+  beforeEach(async () => {
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Update Email Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: testEmail,
+            passwordHash: 'hashed',
+            role: 'MEMBER',
+            emailRemindersEnabled: true,
+          },
+        },
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('successfully disables email reminders', async () => {
+    const result = await updateEmailReminderPreference(false);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: testUserId },
+      select: { emailRemindersEnabled: true },
+    });
+    expect(user.emailRemindersEnabled).toBe(false);
+  });
+
+  test('successfully enables email reminders', async () => {
+    await prisma.user.update({
+      where: { id: testUserId },
+      data: { emailRemindersEnabled: false },
+    });
+
+    const result = await updateEmailReminderPreference(true);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: testUserId },
+      select: { emailRemindersEnabled: true },
+    });
+    expect(user.emailRemindersEnabled).toBe(true);
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await updateEmailReminderPreference(false);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Not authenticated');
+  });
+
+  test('returns error when user not found', async () => {
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: 'nonexistent-user', tenantId: testTenantId }),
+    );
+
+    const result = await updateEmailReminderPreference(false);
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('User not found');

@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { getSession } from '@/lib/session';
+import { NotificationsSection } from './notifications-section';
 import { PasswordSection } from './password-section';
 import { SessionsSection } from './sessions-section';
 
@@ -78,6 +79,8 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <NotificationsSection />
 
       <PasswordSection />
 

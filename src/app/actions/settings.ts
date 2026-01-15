@@ -21,6 +21,16 @@ export type ChangePasswordResult = {
   error?: string;
 };
 
+export type GetEmailReminderPreferenceResult = {
+  emailRemindersEnabled?: boolean;
+  error?: string;
+};
+
+export type UpdateEmailReminderPreferenceResult = {
+  success: boolean;
+  error?: string;
+};
+
 /**
  * Fetches the current user's profile with tenant information.
  * @returns User profile with email, role, tenant name, and join date
@@ -94,6 +104,60 @@ export async function changePassword(
   await prisma.user.update({
     where: { id: session.userId },
     data: { passwordHash: newHash },
+  });
+
+  return { success: true };
+}
+
+/**
+ * Fetches the current user's email reminder preference.
+ * @returns Email reminder preference status
+ */
+export async function getEmailReminderPreference(): Promise<GetEmailReminderPreferenceResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { emailRemindersEnabled: true },
+  });
+
+  if (!user) {
+    return { error: 'User not found' };
+  }
+
+  return { emailRemindersEnabled: user.emailRemindersEnabled };
+}
+
+/**
+ * Updates the current user's email reminder preference.
+ * @param enabled - Whether email reminders should be enabled
+ * @returns Result with success flag and optional error message
+ */
+export async function updateEmailReminderPreference(
+  enabled: boolean,
+): Promise<UpdateEmailReminderPreferenceResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true },
+  });
+
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { emailRemindersEnabled: enabled },
   });
 
   return { success: true };

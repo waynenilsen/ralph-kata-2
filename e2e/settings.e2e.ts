@@ -536,3 +536,188 @@ test.describe('Sessions management', () => {
     await context3.close();
   });
 });
+
+test.describe('Notifications settings', () => {
+  test.afterEach(async () => {
+    // Clean up test data
+    await prisma.session.deleteMany({
+      where: { user: { email: { contains: 'e2e-notifications' } } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { contains: 'e2e-notifications' } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { name: { contains: 'Notifications Test' } },
+    });
+  });
+
+  test('notifications section displays email reminder toggle', async ({
+    page,
+  }) => {
+    const uniqueEmail = `e2e-notifications-display-${Date.now()}@example.com`;
+    const password = 'securepassword123';
+
+    // Register user
+    await page.goto('/register');
+    await page
+      .getByLabel(/organization name/i)
+      .fill('Notifications Test Display Org');
+    await page.getByLabel(/email/i).fill(uniqueEmail);
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+    await expect(page).toHaveURL('/todos');
+
+    // Navigate to settings
+    await page.goto('/settings');
+    await expect(page).toHaveURL('/settings');
+
+    // Verify notifications section is visible
+    await expect(
+      page.locator('[data-slot="card-title"]', { hasText: 'Notifications' }),
+    ).toBeVisible();
+
+    // Wait for preferences to load
+    await expect(page.getByText(/loading preferences/i)).not.toBeVisible({
+      timeout: 5000,
+    });
+
+    // Verify email reminder toggle is visible
+    await expect(
+      page.getByText(/email reminders for due dates/i),
+    ).toBeVisible();
+
+    await takeScreenshot(page, 'settings', 'notifications', 'toggle-displayed');
+  });
+
+  test('email reminder toggle is enabled by default', async ({ page }) => {
+    const uniqueEmail = `e2e-notifications-default-${Date.now()}@example.com`;
+    const password = 'securepassword123';
+
+    // Register user
+    await page.goto('/register');
+    await page
+      .getByLabel(/organization name/i)
+      .fill('Notifications Test Default Org');
+    await page.getByLabel(/email/i).fill(uniqueEmail);
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+    await expect(page).toHaveURL('/todos');
+
+    // Navigate to settings
+    await page.goto('/settings');
+    await expect(page).toHaveURL('/settings');
+
+    // Wait for preferences to load
+    await expect(page.getByText(/loading preferences/i)).not.toBeVisible({
+      timeout: 5000,
+    });
+
+    // Verify checkbox is checked by default
+    const checkbox = page.getByRole('checkbox', {
+      name: /email reminders for due dates/i,
+    });
+    await expect(checkbox).toBeChecked();
+
+    await takeScreenshot(page, 'settings', 'notifications', 'default-enabled');
+  });
+
+  test('can toggle email reminders off and see success message', async ({
+    page,
+  }) => {
+    const uniqueEmail = `e2e-notifications-toggle-${Date.now()}@example.com`;
+    const password = 'securepassword123';
+
+    // Register user
+    await page.goto('/register');
+    await page
+      .getByLabel(/organization name/i)
+      .fill('Notifications Test Toggle Org');
+    await page.getByLabel(/email/i).fill(uniqueEmail);
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+    await expect(page).toHaveURL('/todos');
+
+    // Navigate to settings
+    await page.goto('/settings');
+    await expect(page).toHaveURL('/settings');
+
+    // Wait for preferences to load
+    await expect(page.getByText(/loading preferences/i)).not.toBeVisible({
+      timeout: 5000,
+    });
+
+    // Toggle off
+    const checkbox = page.getByRole('checkbox', {
+      name: /email reminders for due dates/i,
+    });
+    await expect(checkbox).toBeChecked();
+    await checkbox.click();
+
+    // Should show success message
+    await expect(
+      page.getByText(/preference updated successfully/i),
+    ).toBeVisible();
+
+    // Checkbox should now be unchecked
+    await expect(checkbox).not.toBeChecked();
+
+    await takeScreenshot(page, 'settings', 'notifications', 'toggled-off');
+  });
+
+  test('email reminder preference persists after page reload', async ({
+    page,
+  }) => {
+    const uniqueEmail = `e2e-notifications-persist-${Date.now()}@example.com`;
+    const password = 'securepassword123';
+
+    // Register user
+    await page.goto('/register');
+    await page
+      .getByLabel(/organization name/i)
+      .fill('Notifications Test Persist Org');
+    await page.getByLabel(/email/i).fill(uniqueEmail);
+    await page.getByLabel(/password/i).fill(password);
+    await page.getByRole('button', { name: /create account/i }).click();
+    await expect(page).toHaveURL('/todos');
+
+    // Navigate to settings
+    await page.goto('/settings');
+    await expect(page).toHaveURL('/settings');
+
+    // Wait for preferences to load
+    await expect(page.getByText(/loading preferences/i)).not.toBeVisible({
+      timeout: 5000,
+    });
+
+    // Toggle off
+    const checkbox = page.getByRole('checkbox', {
+      name: /email reminders for due dates/i,
+    });
+    await checkbox.click();
+    await expect(
+      page.getByText(/preference updated successfully/i),
+    ).toBeVisible();
+    await expect(checkbox).not.toBeChecked();
+
+    // Reload page
+    await page.reload();
+
+    // Wait for preferences to load again
+    await expect(page.getByText(/loading preferences/i)).not.toBeVisible({
+      timeout: 5000,
+    });
+
+    // Verify preference persisted
+    const checkboxAfterReload = page.getByRole('checkbox', {
+      name: /email reminders for due dates/i,
+    });
+    await expect(checkboxAfterReload).not.toBeChecked();
+
+    await takeScreenshot(
+      page,
+      'settings',
+      'notifications',
+      'persisted-after-reload',
+    );
+  });
+});
