@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { generateNextRecurringTodo } from '@/lib/recurrence';
 import { getSession } from '@/lib/session';
 
 const createTodoSchema = z.object({
@@ -141,6 +142,7 @@ export type ToggleTodoResult = {
 
 /**
  * Toggles the status of a todo between PENDING and COMPLETED.
+ * When completing a recurring todo, generates the next instance.
  * @param todoId - The ID of the todo to toggle
  * @returns The result of the toggle operation
  */
@@ -153,13 +155,13 @@ export async function toggleTodo(todoId: string): Promise<ToggleTodoResult> {
     };
   }
 
-  // First, get the current status of the todo (only if it belongs to the tenant)
+  // First, get the current status and recurrence info of the todo (only if it belongs to the tenant)
   const todo = await prisma.todo.findFirst({
     where: {
       id: todoId,
       tenantId: session.tenantId,
     },
-    select: { status: true },
+    select: { status: true, recurrenceType: true, dueDate: true },
   });
 
   if (!todo) {
@@ -180,6 +182,15 @@ export async function toggleTodo(todoId: string): Promise<ToggleTodoResult> {
       status: newStatus,
     },
   });
+
+  // Generate next recurring instance when completing a recurring todo
+  if (
+    newStatus === 'COMPLETED' &&
+    todo.recurrenceType !== 'NONE' &&
+    todo.dueDate
+  ) {
+    await generateNextRecurringTodo(todoId);
+  }
 
   revalidatePath('/todos');
 

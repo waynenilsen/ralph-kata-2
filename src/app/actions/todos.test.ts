@@ -329,6 +329,101 @@ describe('toggleTodo', () => {
     await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
   });
+
+  test('generates next instance when completing a recurring todo', async () => {
+    // Update the test todo to be recurring
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: {
+        dueDate: new Date('2026-01-15'),
+        recurrenceType: 'WEEKLY',
+      },
+    });
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify original todo is COMPLETED
+    const originalTodo = await prisma.todo.findUnique({
+      where: { id: testTodoId },
+    });
+    expect(originalTodo?.status).toBe('COMPLETED');
+
+    // Verify new todo was created
+    const todos = await prisma.todo.findMany({
+      where: { tenantId: testTenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(todos).toHaveLength(2);
+
+    const newTodo = todos.find((t) => t.id !== testTodoId);
+    expect(newTodo).not.toBeNull();
+    expect(newTodo?.status).toBe('PENDING');
+    expect(newTodo?.title).toBe('Todo to toggle');
+    expect(newTodo?.dueDate).toEqual(new Date('2026-01-22'));
+    expect(newTodo?.recurrenceType).toBe('WEEKLY');
+  });
+
+  test('does not generate next instance for non-recurring todo', async () => {
+    // Original todo has NONE recurrence by default
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify only one todo exists
+    const todos = await prisma.todo.findMany({
+      where: { tenantId: testTenantId },
+    });
+    expect(todos).toHaveLength(1);
+  });
+
+  test('does not generate next instance when uncompleting a recurring todo', async () => {
+    // Update the test todo to be recurring and COMPLETED
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: {
+        status: 'COMPLETED',
+        dueDate: new Date('2026-01-15'),
+        recurrenceType: 'WEEKLY',
+      },
+    });
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify todo is now PENDING
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.status).toBe('PENDING');
+
+    // Verify no new todo was created
+    const todos = await prisma.todo.findMany({
+      where: { tenantId: testTenantId },
+    });
+    expect(todos).toHaveLength(1);
+  });
+
+  test('does not generate next instance when recurring todo has no dueDate', async () => {
+    // Update the test todo to be recurring but without dueDate
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: {
+        recurrenceType: 'WEEKLY',
+        dueDate: null,
+      },
+    });
+
+    const result = await toggleTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify only one todo exists
+    const todos = await prisma.todo.findMany({
+      where: { tenantId: testTenantId },
+    });
+    expect(todos).toHaveLength(1);
+  });
 });
 
 describe('updateTodo', () => {
