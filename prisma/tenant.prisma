@@ -4,6 +4,7 @@ model Tenant {
   users     User[]
   todos     Todo[]
   invites   Invite[]
+  labels    Label[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

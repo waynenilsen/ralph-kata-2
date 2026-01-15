@@ -1,0 +1,22 @@
+model Label {
+  id        String      @id @default(cuid())
+  name      String
+  color     String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  tenantId  String
+  todos     TodoLabel[]
+  createdAt DateTime    @default(now())
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model TodoLabel {
+  todo    Todo   @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  todoId  String
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  labelId String
+
+  @@id([todoId, labelId])
+  @@index([labelId])
+}
