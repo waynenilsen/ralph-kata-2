@@ -9,6 +9,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+interface Member {
+  id: string;
+  email: string;
+}
+
+interface TodoFiltersProps {
+  members: Member[];
+}
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
@@ -26,16 +35,17 @@ const SORT_OPTIONS = [
  * Filter controls component for filtering and sorting todos.
  * Updates URL search params when filter/sort selection changes.
  */
-export function TodoFilters() {
+export function TodoFilters({ members }: TodoFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const currentStatus = searchParams.get('status') || 'all';
   const currentSort = searchParams.get('sort') || 'created-desc';
+  const currentAssignee = searchParams.get('assignee') || 'all';
 
   function updateFilter(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (value === 'all' && key === 'status') {
+    if (value === 'all' && (key === 'status' || key === 'assignee')) {
       params.delete(key);
     } else if (value === 'created-desc' && key === 'sort') {
       params.delete(key);
@@ -59,6 +69,25 @@ export function TodoFilters() {
           {STATUS_OPTIONS.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={currentAssignee}
+        onValueChange={(v) => updateFilter('assignee', v)}
+      >
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="All" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="me">My Todos</SelectItem>
+          <SelectItem value="unassigned">Unassigned</SelectItem>
+          {members.map((member) => (
+            <SelectItem key={member.id} value={member.id}>
+              {member.email}
             </SelectItem>
           ))}
         </SelectContent>

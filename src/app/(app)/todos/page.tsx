@@ -60,7 +60,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       <CreateTodoForm members={members} />
 
       <Suspense fallback={null}>
-        <TodoFilters />
+        <TodoFilters members={members} />
       </Suspense>
 
       {todos.length === 0 ? (
