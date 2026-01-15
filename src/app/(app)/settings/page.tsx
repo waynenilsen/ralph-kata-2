@@ -1,3 +1,5 @@
+import { ChevronRight, Tags } from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getUserProfile } from '@/app/actions/settings';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +87,32 @@ export default async function SettingsPage() {
       <PasswordSection />
 
       <SessionsSection />
+
+      {profile.role === 'ADMIN' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Admin</CardTitle>
+            <CardDescription>Team management options</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Link
+              href="/settings/labels"
+              className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Tags className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Labels</p>
+                  <p className="text-sm text-muted-foreground">
+                    Manage labels for categorizing todos
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

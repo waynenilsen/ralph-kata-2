@@ -92,7 +92,7 @@ test.describe('Settings page', () => {
     await expect(page.getByText(testEmail)).toBeVisible();
 
     // Verify role badge (should be ADMIN since they created the org)
-    await expect(page.getByText('ADMIN')).toBeVisible();
+    await expect(page.getByText('ADMIN', { exact: true })).toBeVisible();
 
     // Verify team name
     await expect(page.getByText(testOrgName)).toBeVisible();
