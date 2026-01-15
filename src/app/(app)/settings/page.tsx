@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card';
 import { getSession } from '@/lib/session';
 import { PasswordSection } from './password-section';
+import { SessionsSection } from './sessions-section';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -79,6 +80,8 @@ export default async function SettingsPage() {
       </Card>
 
       <PasswordSection />
+
+      <SessionsSection />
     </div>
   );
 }

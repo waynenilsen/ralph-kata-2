@@ -3,6 +3,7 @@ import { prisma } from './prisma';
 import {
   createSession,
   destroySession,
+  getCurrentSessionId,
   getRequestContext,
   getSession,
 } from './session';
@@ -270,6 +271,24 @@ describe('session management', () => {
         where: { id: session.id },
       });
       expect(dbSession).toBeNull();
+    });
+  });
+
+  describe('getCurrentSessionId', () => {
+    test('returns null when no cookie exists', async () => {
+      mockCookieStore.get.mockReturnValue(null);
+
+      const result = await getCurrentSessionId();
+
+      expect(result).toBeNull();
+    });
+
+    test('returns session id when cookie exists', async () => {
+      mockCookieStore.get.mockReturnValue({ value: 'test-session-id' });
+
+      const result = await getCurrentSessionId();
+
+      expect(result).toBe('test-session-id');
     });
   });
 

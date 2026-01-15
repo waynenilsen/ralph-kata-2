@@ -67,6 +67,16 @@ export async function createSession(
 }
 
 /**
+ * Gets the current session ID from the cookie.
+ * @returns The session ID or null if no cookie exists
+ */
+export async function getCurrentSessionId(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  return sessionCookie?.value ?? null;
+}
+
+/**
  * Gets the current session from the cookie.
  * Updates lastActiveAt if more than 5 minutes have passed since the last update.
  * @returns The session data or null if not authenticated
