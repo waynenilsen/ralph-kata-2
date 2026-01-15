@@ -508,11 +508,9 @@ test.describe('Notifications', () => {
       // Should navigate to todos page with the todo visible
       await expect(memberPage).toHaveURL('/todos');
       // Use the todo card to verify the todo is visible
-      const todoCard = memberPage
-        .locator('[data-testid="todo-card"]')
-        .filter({
-          has: memberPage.getByText('Navigate Test Task', { exact: true }),
-        });
+      const todoCard = memberPage.locator('[data-testid="todo-card"]').filter({
+        has: memberPage.getByText('Navigate Test Task', { exact: true }),
+      });
       await expect(todoCard).toBeVisible();
       await takeScreenshot(
         memberPage,

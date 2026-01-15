@@ -1,37 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TeamTodo
+
+A multi-tenant task management application for small teams. Simple by design—no bloat, just the features teams need to get work done.
+
+## Features
+
+- **Multi-tenant isolation** - Each team's data is private and secure
+- **Todo management** - Create, organize, and track tasks with status, due dates, and assignments
+- **Comments** - Collaborate on tasks with threaded comments
+- **Subtasks** - Break down work into smaller checklist items
+- **Labels** - Organize tasks with custom colored tags
+- **Recurring tasks** - Set tasks to repeat daily, weekly, biweekly, monthly, or yearly
+- **Notifications** - Get notified when assigned tasks or when someone comments
+- **Email reminders** - Automated emails for due-soon and overdue tasks
+- **Filtering & sorting** - Filter by status, sort by date, with URL-based state for sharing
+- **Pagination** - Navigate large task lists efficiently
+
+## Tech Stack
+
+- **Frontend**: React 19, Next.js 16 (App Router)
+- **Database**: SQLite with Prisma ORM
+- **Styling**: Tailwind CSS 4, Radix UI
+- **Auth**: Session-based authentication
+- **Email**: Nodemailer with React Email
+- **Runtime**: Bun
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- [Bun](https://bun.sh/) installed
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install dependencies
+bun install
+
+# Setup database
+bun run db:push
+
+# Start development server
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Run dev server
+bun run dev
 
-## Learn More
+# Run unit tests
+bun test
 
-To learn more about Next.js, take a look at the following resources:
+# Run E2E tests
+bun run test:e2e
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Run all tests
+bun run test:all
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Lint and format
+bun run check
 
-## Deploy on Vercel
+# Generate documentation
+bun run docs
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Build for production
+bun run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Database Commands
 
+```bash
+bun run db:push      # Push schema changes
+bun run db:studio    # Open Prisma Studio GUI
+bun run db:generate  # Generate Prisma client
+```
+
+## Project Structure
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (app)/             # Protected routes (todos, settings)
+│   ├── actions/           # Server actions
+│   └── api/               # API routes (cron jobs)
+├── components/ui/         # Radix UI-based components
+└── lib/                   # Utilities and helpers
+
+prisma/                    # Database schema (split by domain)
+e2e/                       # Playwright E2E tests
+prd/                       # Product requirements documents
+```
+
+## License
+
+Private
