@@ -9,6 +9,7 @@ model User {
   assignedTodos       Todo[]               @relation("AssignedTodos")
   sessions            Session[]
   passwordResetTokens   PasswordResetToken[]
+  comments              Comment[]
   emailRemindersEnabled Boolean              @default(true)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
