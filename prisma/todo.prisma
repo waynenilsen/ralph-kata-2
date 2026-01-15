@@ -8,6 +8,8 @@ model Todo {
   tenantId    String
   createdBy   User       @relation("CreatedTodos", fields: [createdById], references: [id])
   createdById String
+  assignee    User?      @relation("AssignedTodos", fields: [assigneeId], references: [id])
+  assigneeId  String?
   createdAt               DateTime   @default(now())
   updatedAt               DateTime   @updatedAt
   dueSoonReminderSentAt   DateTime?
@@ -17,6 +19,7 @@ model Todo {
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
   @@index([tenantId, createdAt])
+  @@index([tenantId, assigneeId])
   @@index([dueDate, status, dueSoonReminderSentAt])
   @@index([dueDate, status, overdueReminderSentAt])
 }

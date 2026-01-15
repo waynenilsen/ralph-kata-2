@@ -6,6 +6,7 @@ model User {
   tenant              Tenant               @relation(fields: [tenantId], references: [id])
   tenantId            String
   todos               Todo[]               @relation("CreatedTodos")
+  assignedTodos       Todo[]               @relation("AssignedTodos")
   sessions            Session[]
   passwordResetTokens   PasswordResetToken[]
   emailRemindersEnabled Boolean              @default(true)
