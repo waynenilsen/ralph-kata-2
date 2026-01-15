@@ -1,6 +1,6 @@
 'use client';
 
-import { MessageSquare } from 'lucide-react';
+import { CheckSquare, MessageSquare } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { deleteTodo, toggleTodo } from '@/app/actions/todos';
 import { LabelBadge } from '@/components/label-badge';
@@ -42,6 +42,9 @@ type TodoCardProps = {
         name: string;
         color: string;
       };
+    }[];
+    subtasks: {
+      isComplete: boolean;
     }[];
   };
   members: { id: string; email: string }[];
@@ -174,6 +177,18 @@ export function TodoCard({ todo, members, labels }: TodoCardProps) {
                 +{todo.labels.length - 3} more
               </span>
             )}
+          </div>
+        )}
+        {todo.subtasks.length > 0 && (
+          <div
+            className="flex items-center gap-1 text-muted-foreground text-xs mt-2"
+            data-testid="subtask-progress"
+          >
+            <CheckSquare className="h-3 w-3" />
+            <span>
+              {todo.subtasks.filter((s) => s.isComplete).length}/
+              {todo.subtasks.length}
+            </span>
           </div>
         )}
         {todo._count.comments > 0 && (

@@ -28,6 +28,7 @@ const baseTodo = {
   _count: { comments: 0 },
   comments: [],
   labels: [],
+  subtasks: [],
 };
 
 const members = [{ id: '1', email: 'test@example.com' }];
@@ -50,11 +51,13 @@ describe('TodoCard', () => {
       const cardContentChildren = cardContent?.props?.children;
 
       // The comment count div should not be present when count is 0
-      // CardContent children: [description, assignee, dueDate, labels?, commentCount?]
-      // With empty labels and 0 comments, index 3 and 4 should be falsy
+      // CardContent children: [description, assignee, dueDate, labels?, subtasks?, commentCount?]
+      // With empty labels, subtasks and 0 comments, index 3, 4 and 5 should be falsy
       const labelsDiv = cardContentChildren?.[3];
-      const commentCountDiv = cardContentChildren?.[4];
+      const subtasksDiv = cardContentChildren?.[4];
+      const commentCountDiv = cardContentChildren?.[5];
       expect(labelsDiv).toBeFalsy();
+      expect(subtasksDiv).toBeFalsy();
       expect(commentCountDiv).toBeFalsy();
     });
 
@@ -70,8 +73,8 @@ describe('TodoCard', () => {
       const cardContentChildren = cardContent?.props?.children;
 
       // The comment count div should be present when count > 0
-      // CardContent children: [description, assignee, dueDate, labels?, commentCount?]
-      const commentCountDiv = cardContentChildren?.[4]; // Fifth child is comment count (labels at 3)
+      // CardContent children: [description, assignee, dueDate, labels?, subtasks?, commentCount?]
+      const commentCountDiv = cardContentChildren?.[5]; // Sixth child is comment count
       expect(commentCountDiv).toBeTruthy();
 
       // Check the count value - div > [MessageSquare, span with count]
@@ -88,7 +91,7 @@ describe('TodoCard', () => {
 
       const cardContent = result?.props?.children?.[1];
       const cardContentChildren = cardContent?.props?.children;
-      const commentCountDiv = cardContentChildren?.[4];
+      const commentCountDiv = cardContentChildren?.[5];
 
       expect(commentCountDiv).toBeTruthy();
       const commentCountSpan = commentCountDiv?.props?.children?.[1];
@@ -104,7 +107,7 @@ describe('TodoCard', () => {
 
       const cardContent = result?.props?.children?.[1];
       const cardContentChildren = cardContent?.props?.children;
-      const commentCountDiv = cardContentChildren?.[4];
+      const commentCountDiv = cardContentChildren?.[5];
 
       // First child should be the MessageSquare icon
       const messageSquareIcon = commentCountDiv?.props?.children?.[0];
@@ -228,6 +231,126 @@ describe('TodoCard', () => {
 
       expect(firstBadge?.props?.name).toBe('Bug');
       expect(firstBadge?.props?.color).toBe('#ff0000');
+    });
+  });
+
+  describe('subtask progress display', () => {
+    test('does not show subtask progress when subtasks array is empty', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, subtasks: [] },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      // subtasks section would be at index 4 (after description, assignee, dueDate, labels)
+      const subtasksDiv = cardContentChildren?.[4];
+      expect(subtasksDiv).toBeFalsy();
+    });
+
+    test('shows subtask progress when subtasks exist', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          subtasks: [
+            { isComplete: true },
+            { isComplete: false },
+            { isComplete: true },
+          ],
+        },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const subtasksDiv = cardContentChildren?.[4];
+      expect(subtasksDiv).toBeTruthy();
+      expect(subtasksDiv?.props?.['data-testid']).toBe('subtask-progress');
+    });
+
+    test('shows correct completed/total count', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          subtasks: [
+            { isComplete: true },
+            { isComplete: false },
+            { isComplete: true },
+            { isComplete: false },
+            { isComplete: true },
+          ],
+        },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const subtasksDiv = cardContentChildren?.[4];
+      const subtaskSpan = subtasksDiv?.props?.children?.[1];
+
+      // The span contains [completed, "/", total]
+      expect(subtaskSpan?.props?.children).toEqual([3, '/', 5]);
+    });
+
+    test('shows 0/N when no subtasks are complete', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          subtasks: [{ isComplete: false }, { isComplete: false }],
+        },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const subtasksDiv = cardContentChildren?.[4];
+      const subtaskSpan = subtasksDiv?.props?.children?.[1];
+
+      expect(subtaskSpan?.props?.children).toEqual([0, '/', 2]);
+    });
+
+    test('shows N/N when all subtasks are complete', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          subtasks: [{ isComplete: true }, { isComplete: true }],
+        },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const subtasksDiv = cardContentChildren?.[4];
+      const subtaskSpan = subtasksDiv?.props?.children?.[1];
+
+      expect(subtaskSpan?.props?.children).toEqual([2, '/', 2]);
+    });
+
+    test('shows CheckSquare icon when subtasks exist', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          subtasks: [{ isComplete: true }],
+        },
+        members,
+        labels,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const subtasksDiv = cardContentChildren?.[4];
+
+      // First child should be the CheckSquare icon (lucide exports as SquareCheckBig)
+      const checkSquareIcon = subtasksDiv?.props?.children?.[0];
+      expect(checkSquareIcon).toBeTruthy();
+      expect(
+        checkSquareIcon?.type?.displayName || checkSquareIcon?.type?.name,
+      ).toBe('SquareCheckBig');
     });
   });
 

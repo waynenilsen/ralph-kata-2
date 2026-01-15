@@ -74,6 +74,9 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
         labels: {
           include: { label: true },
         },
+        subtasks: {
+          select: { isComplete: true },
+        },
       },
     }),
     prisma.todo.count({ where }),
