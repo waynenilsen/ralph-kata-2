@@ -62,7 +62,7 @@ export function TodoFilters({ members }: TodoFiltersProps) {
         value={currentStatus}
         onValueChange={(v) => updateFilter('status', v)}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger className="w-[140px]" data-testid="status-filter">
           <SelectValue placeholder="Status" />
         </SelectTrigger>
         <SelectContent>
@@ -78,7 +78,7 @@ export function TodoFilters({ members }: TodoFiltersProps) {
         value={currentAssignee}
         onValueChange={(v) => updateFilter('assignee', v)}
       >
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-[180px]" data-testid="assignee-filter">
           <SelectValue placeholder="All" />
         </SelectTrigger>
         <SelectContent>
@@ -97,7 +97,7 @@ export function TodoFilters({ members }: TodoFiltersProps) {
         value={currentSort}
         onValueChange={(v) => updateFilter('sort', v)}
       >
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger className="w-[180px]" data-testid="sort-filter">
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>
         <SelectContent>

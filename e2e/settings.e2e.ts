@@ -23,16 +23,34 @@ test.describe('Settings page', () => {
   });
 
   test.afterAll(async () => {
-    // Clean up test data
-    await prisma.session.deleteMany({
-      where: { user: { email: testEmail } },
-    });
-    await prisma.user.deleteMany({
-      where: { email: testEmail },
-    });
-    await prisma.tenant.deleteMany({
+    // Clean up test data - find tenant and delete all related data
+    const tenant = await prisma.tenant.findFirst({
       where: { name: testOrgName },
     });
+    if (tenant) {
+      // Delete in order respecting foreign key constraints
+      await prisma.comment.deleteMany({
+        where: { todo: { tenantId: tenant.id } },
+      });
+      await prisma.todo.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.session.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.passwordResetToken.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.user.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.invite.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.tenant.delete({
+        where: { id: tenant.id },
+      });
+    }
   });
 
   test('navigates to settings page from user menu', async ({ page }) => {
@@ -88,16 +106,33 @@ test.describe('Settings page', () => {
 
 test.describe('Password change', () => {
   test.afterEach(async () => {
-    // Clean up test data
-    await prisma.session.deleteMany({
-      where: { user: { email: { contains: 'e2e-password' } } },
-    });
-    await prisma.user.deleteMany({
-      where: { email: { contains: 'e2e-password' } },
-    });
-    await prisma.tenant.deleteMany({
+    // Clean up test data - find tenants and delete all related data
+    const tenants = await prisma.tenant.findMany({
       where: { name: { contains: 'Password Change' } },
     });
+    for (const tenant of tenants) {
+      await prisma.comment.deleteMany({
+        where: { todo: { tenantId: tenant.id } },
+      });
+      await prisma.todo.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.session.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.passwordResetToken.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.user.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.invite.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.tenant.delete({
+        where: { id: tenant.id },
+      });
+    }
   });
 
   test('change password with correct current password succeeds', async ({
@@ -214,16 +249,33 @@ test.describe('Password change', () => {
 
 test.describe('Sessions management', () => {
   test.afterEach(async () => {
-    // Clean up test data
-    await prisma.session.deleteMany({
-      where: { user: { email: { contains: 'e2e-sessions' } } },
-    });
-    await prisma.user.deleteMany({
-      where: { email: { contains: 'e2e-sessions' } },
-    });
-    await prisma.tenant.deleteMany({
+    // Clean up test data - find tenants and delete all related data
+    const tenants = await prisma.tenant.findMany({
       where: { name: { contains: 'Sessions Test' } },
     });
+    for (const tenant of tenants) {
+      await prisma.comment.deleteMany({
+        where: { todo: { tenantId: tenant.id } },
+      });
+      await prisma.todo.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.session.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.passwordResetToken.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.user.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.invite.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.tenant.delete({
+        where: { id: tenant.id },
+      });
+    }
   });
 
   test('session list displays sessions', async ({ page }) => {
@@ -539,16 +591,33 @@ test.describe('Sessions management', () => {
 
 test.describe('Notifications settings', () => {
   test.afterEach(async () => {
-    // Clean up test data
-    await prisma.session.deleteMany({
-      where: { user: { email: { contains: 'e2e-notifications' } } },
-    });
-    await prisma.user.deleteMany({
-      where: { email: { contains: 'e2e-notifications' } },
-    });
-    await prisma.tenant.deleteMany({
+    // Clean up test data - find tenants and delete all related data
+    const tenants = await prisma.tenant.findMany({
       where: { name: { contains: 'Notifications Test' } },
     });
+    for (const tenant of tenants) {
+      await prisma.comment.deleteMany({
+        where: { todo: { tenantId: tenant.id } },
+      });
+      await prisma.todo.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.session.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.passwordResetToken.deleteMany({
+        where: { user: { tenantId: tenant.id } },
+      });
+      await prisma.user.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.invite.deleteMany({
+        where: { tenantId: tenant.id },
+      });
+      await prisma.tenant.delete({
+        where: { id: tenant.id },
+      });
+    }
   });
 
   test('notifications section displays email reminder toggle', async ({

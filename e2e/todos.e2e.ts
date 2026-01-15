@@ -126,7 +126,7 @@ test.describe('Todos filtering', () => {
     );
 
     // Filter by pending
-    await page.getByRole('combobox').first().click();
+    await page.getByTestId('status-filter').click();
     await page.getByRole('option', { name: 'Pending' }).click();
 
     // Should show only pending todos
@@ -158,7 +158,7 @@ test.describe('Todos filtering', () => {
     await toggleTodoStatus(page, 'Completed Task 2');
 
     // Filter by completed
-    await page.getByRole('combobox').first().click();
+    await page.getByTestId('status-filter').click();
     await page.getByRole('option', { name: 'Completed' }).click();
 
     // Should show only completed todos
@@ -186,7 +186,7 @@ test.describe('Todos filtering', () => {
     await createTodo(page, 'Third Created');
 
     // Sort by oldest first
-    await page.getByRole('combobox').nth(1).click();
+    await page.getByTestId('sort-filter').click();
     await page.getByRole('option', { name: 'Oldest first' }).click();
 
     // Verify URL has sort param
@@ -218,7 +218,7 @@ test.describe('Todos filtering', () => {
     await createTodo(page, 'Due Soon', tomorrow.toISOString().split('T')[0]);
 
     // Sort by due date soonest
-    await page.getByRole('combobox').nth(1).click();
+    await page.getByTestId('sort-filter').click();
     await page.getByRole('option', { name: 'Due date (soonest)' }).click();
 
     // Verify URL has sort param
@@ -250,7 +250,7 @@ test.describe('Todos filtering', () => {
     await createTodo(page, 'Due Later', nextWeek.toISOString().split('T')[0]);
 
     // Sort by due date furthest
-    await page.getByRole('combobox').nth(1).click();
+    await page.getByTestId('sort-filter').click();
     await page.getByRole('option', { name: 'Due date (furthest)' }).click();
 
     // Verify URL has sort param
@@ -278,7 +278,7 @@ test.describe('Todos filtering', () => {
     await toggleTodoStatus(page1, 'Tenant1 Todo');
 
     // Filter by completed on tenant 1
-    await page1.getByRole('combobox').first().click();
+    await page1.getByTestId('status-filter').click();
     await page1.getByRole('option', { name: 'Completed' }).click();
     await expect(page1.getByText('Tenant1 Todo')).toBeVisible();
     await page1.close();
@@ -290,7 +290,7 @@ test.describe('Todos filtering', () => {
     await toggleTodoStatus(page2, 'Tenant2 Todo');
 
     // Filter by completed on tenant 2 - should only see tenant 2's todo
-    await page2.getByRole('combobox').first().click();
+    await page2.getByTestId('status-filter').click();
     await page2.getByRole('option', { name: 'Completed' }).click();
     await expect(page2.getByText('Tenant2 Todo')).toBeVisible();
     // Should NOT see tenant 1's todo
@@ -393,7 +393,7 @@ test.describe('Todos pagination', () => {
 
     // Now we have 12 completed (3-14 except 1,2) and 2 pending (1,2)
     // Filter by completed - should have 12 completed (10 on page 1, 2 on page 2)
-    await page.getByRole('combobox').first().click();
+    await page.getByTestId('status-filter').click();
     await page.getByRole('option', { name: 'Completed' }).click();
 
     await expect(page.getByText('12 todos')).toBeVisible();
@@ -433,7 +433,7 @@ test.describe('Todos pagination', () => {
     }
 
     // Sort by oldest first
-    await page.getByRole('combobox').nth(1).click();
+    await page.getByTestId('sort-filter').click();
     await page.getByRole('option', { name: 'Oldest first' }).click();
 
     // First todo created should be first on page 1
