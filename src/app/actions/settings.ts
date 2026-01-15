@@ -1,5 +1,6 @@
 'use server';
 
+import { hashPassword, verifyPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 
@@ -12,6 +13,11 @@ export type UserProfile = {
 
 export type GetUserProfileResult = {
   profile?: UserProfile;
+  error?: string;
+};
+
+export type ChangePasswordResult = {
+  success: boolean;
   error?: string;
 };
 
@@ -52,4 +58,43 @@ export async function getUserProfile(): Promise<GetUserProfileResult> {
       createdAt: user.createdAt,
     },
   };
+}
+
+/**
+ * Change user password with current password verification.
+ * @param currentPassword - The user's current password
+ * @param newPassword - The new password to set
+ * @returns Result with success flag and optional error message
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return { success: false, error: 'Not authenticated' };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { passwordHash: true },
+  });
+
+  if (!user) {
+    return { success: false, error: 'User not found' };
+  }
+
+  const isValid = await verifyPassword(currentPassword, user.passwordHash);
+  if (!isValid) {
+    return { success: false, error: 'Current password is incorrect' };
+  }
+
+  const newHash = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: { passwordHash: newHash },
+  });
+
+  return { success: true };
 }

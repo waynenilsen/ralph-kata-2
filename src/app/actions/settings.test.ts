@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { hashPassword, verifyPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // Mock session module
@@ -10,7 +11,7 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { getUserProfile } = await import('./settings');
+const { getUserProfile, changePassword } = await import('./settings');
 
 describe('getUserProfile', () => {
   const testTenantId = `tenant-settings-${Date.now()}`;
@@ -102,5 +103,96 @@ describe('getUserProfile', () => {
 
     // Clean up member user
     await prisma.user.delete({ where: { id: memberUserId } });
+  });
+});
+
+describe('changePassword', () => {
+  const testTenantId = `tenant-pwd-${Date.now()}`;
+  const testUserId = `user-pwd-${Date.now()}`;
+  const testEmail = `pwd-${Date.now()}@example.com`;
+  const originalPassword = 'original-password-123';
+  let originalPasswordHash: string;
+
+  beforeEach(async () => {
+    originalPasswordHash = await hashPassword(originalPassword);
+
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Password Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: testEmail,
+            passwordHash: originalPasswordHash,
+            role: 'MEMBER',
+          },
+        },
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('successfully changes password with correct current password', async () => {
+    const newPassword = 'new-password-456';
+
+    const result = await changePassword(originalPassword, newPassword);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    // Verify new password works
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: testUserId },
+      select: { passwordHash: true },
+    });
+    const passwordValid = await verifyPassword(newPassword, user.passwordHash);
+    expect(passwordValid).toBe(true);
+  });
+
+  test('returns error when current password is incorrect', async () => {
+    const result = await changePassword('wrong-password', 'new-password-456');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Current password is incorrect');
+
+    // Verify password unchanged
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: testUserId },
+      select: { passwordHash: true },
+    });
+    const passwordValid = await verifyPassword(
+      originalPassword,
+      user.passwordHash,
+    );
+    expect(passwordValid).toBe(true);
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await changePassword(originalPassword, 'new-password-456');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Not authenticated');
+  });
+
+  test('returns error when user not found', async () => {
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: 'nonexistent-user', tenantId: testTenantId }),
+    );
+
+    const result = await changePassword(originalPassword, 'new-password-456');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('User not found');
   });
 });

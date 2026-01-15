@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { getSession } from '@/lib/session';
+import { PasswordSection } from './password-section';
 
 export default async function SettingsPage() {
   const session = await getSession();
@@ -32,8 +33,8 @@ export default async function SettingsPage() {
   });
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
+    <div className="container mx-auto py-8 px-4 max-w-2xl space-y-6">
+      <h1 className="text-2xl font-semibold">Settings</h1>
 
       <Card>
         <CardHeader>
@@ -76,6 +77,8 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PasswordSection />
     </div>
   );
 }
