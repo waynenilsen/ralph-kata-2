@@ -73,7 +73,7 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
       ) : (
         <div className="space-y-4">
           {todos.map((todo) => (
-            <TodoCard key={todo.id} todo={todo} />
+            <TodoCard key={todo.id} todo={todo} members={members} />
           ))}
         </div>
       )}

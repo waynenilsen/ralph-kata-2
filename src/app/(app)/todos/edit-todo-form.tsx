@@ -1,10 +1,17 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { type UpdateTodoState, updateTodo } from '@/app/actions/todos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 type EditTodoFormProps = {
   todo: {
@@ -12,15 +19,23 @@ type EditTodoFormProps = {
     title: string;
     description: string | null;
     dueDate: Date | null;
+    assigneeId: string | null;
   };
+  members: { id: string; email: string }[];
   onCancel: () => void;
   onSuccess: () => void;
 };
 
 const initialState: UpdateTodoState = {};
 
-export function EditTodoForm({ todo, onCancel, onSuccess }: EditTodoFormProps) {
+export function EditTodoForm({
+  todo,
+  members,
+  onCancel,
+  onSuccess,
+}: EditTodoFormProps) {
   const [state, formAction, pending] = useActionState(updateTodo, initialState);
+  const [assigneeId, setAssigneeId] = useState(todo.assigneeId ?? '');
 
   useEffect(() => {
     if (state.success) {
@@ -87,6 +102,32 @@ export function EditTodoForm({ todo, onCancel, onSuccess }: EditTodoFormProps) {
         {state.errors?.dueDate && (
           <p className="text-sm text-destructive">
             {state.errors.dueDate.join(', ')}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor={`assigneeId-${todo.id}`}>Assignee (optional)</Label>
+        <input type="hidden" name="assigneeId" value={assigneeId} />
+        <Select value={assigneeId} onValueChange={setAssigneeId}>
+          <SelectTrigger
+            id={`assigneeId-${todo.id}`}
+            aria-invalid={!!state.errors?.assigneeId}
+          >
+            <SelectValue placeholder="Unassigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Unassigned</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.id} value={m.id}>
+                {m.email}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {state.errors?.assigneeId && (
+          <p className="text-sm text-destructive">
+            {state.errors.assigneeId.join(', ')}
           </p>
         )}
       </div>
