@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { prisma } from './prisma';
-import { createSession, destroySession, getSession } from './session';
+import {
+  createSession,
+  destroySession,
+  getRequestContext,
+  getSession,
+} from './session';
 
 // Mock next/headers cookies
 const mockCookieStore = {
@@ -9,8 +14,14 @@ const mockCookieStore = {
   delete: mock(() => {}),
 };
 
+// Mock next/headers headers
+const mockHeaderStore = {
+  get: mock((_name: string) => null as string | null),
+};
+
 mock.module('next/headers', () => ({
   cookies: () => mockCookieStore,
+  headers: () => mockHeaderStore,
 }));
 
 describe('session management', () => {
@@ -38,6 +49,8 @@ describe('session management', () => {
     mockCookieStore.set.mockReset();
     mockCookieStore.delete.mockReset();
     mockCookieStore.get.mockReturnValue(null);
+    mockHeaderStore.get.mockReset();
+    mockHeaderStore.get.mockReturnValue(null);
   });
 
   afterEach(async () => {
@@ -92,6 +105,54 @@ describe('session management', () => {
         }),
       );
     });
+
+    test('stores userAgent when provided', async () => {
+      const session = await createSession(testUserId, testTenantId, {
+        userAgent: 'Mozilla/5.0 Test Browser',
+      });
+
+      const dbSession = await prisma.session.findUnique({
+        where: { id: session.id },
+      });
+      expect(dbSession?.userAgent).toBe('Mozilla/5.0 Test Browser');
+    });
+
+    test('stores ipAddress when provided', async () => {
+      const session = await createSession(testUserId, testTenantId, {
+        ipAddress: '192.168.1.1',
+      });
+
+      const dbSession = await prisma.session.findUnique({
+        where: { id: session.id },
+      });
+      expect(dbSession?.ipAddress).toBe('192.168.1.1');
+    });
+
+    test('stores both userAgent and ipAddress when provided', async () => {
+      const session = await createSession(testUserId, testTenantId, {
+        userAgent: 'Test Agent',
+        ipAddress: '10.0.0.1',
+      });
+
+      const dbSession = await prisma.session.findUnique({
+        where: { id: session.id },
+      });
+      expect(dbSession?.userAgent).toBe('Test Agent');
+      expect(dbSession?.ipAddress).toBe('10.0.0.1');
+    });
+
+    test('sets lastActiveAt to current time', async () => {
+      const before = new Date();
+      const session = await createSession(testUserId, testTenantId);
+      const after = new Date();
+
+      expect(session.lastActiveAt.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
+      expect(session.lastActiveAt.getTime()).toBeLessThanOrEqual(
+        after.getTime(),
+      );
+    });
   });
 
   describe('getSession', () => {
@@ -135,6 +196,55 @@ describe('session management', () => {
         tenantId: testTenantId,
       });
     });
+
+    test('updates lastActiveAt when session is stale (> 5 min)', async () => {
+      const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+      const session = await prisma.session.create({
+        data: {
+          userId: testUserId,
+          tenantId: testTenantId,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+          lastActiveAt: sixMinutesAgo,
+        },
+      });
+      mockCookieStore.get.mockReturnValue({ value: session.id });
+
+      const before = new Date();
+      await getSession();
+      const after = new Date();
+
+      const updatedSession = await prisma.session.findUnique({
+        where: { id: session.id },
+      });
+      expect(updatedSession?.lastActiveAt.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
+      expect(updatedSession?.lastActiveAt.getTime()).toBeLessThanOrEqual(
+        after.getTime(),
+      );
+    });
+
+    test('does not update lastActiveAt when session is fresh (< 5 min)', async () => {
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+      const session = await prisma.session.create({
+        data: {
+          userId: testUserId,
+          tenantId: testTenantId,
+          expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+          lastActiveAt: twoMinutesAgo,
+        },
+      });
+      mockCookieStore.get.mockReturnValue({ value: session.id });
+
+      await getSession();
+
+      const updatedSession = await prisma.session.findUnique({
+        where: { id: session.id },
+      });
+      expect(updatedSession?.lastActiveAt.getTime()).toBe(
+        twoMinutesAgo.getTime(),
+      );
+    });
   });
 
   describe('destroySession', () => {
@@ -160,6 +270,62 @@ describe('session management', () => {
         where: { id: session.id },
       });
       expect(dbSession).toBeNull();
+    });
+  });
+
+  describe('getRequestContext', () => {
+    test('returns userAgent from headers', async () => {
+      mockHeaderStore.get.mockImplementation((name: string) => {
+        if (name === 'user-agent') return 'Mozilla/5.0 Test';
+        return null;
+      });
+
+      const context = await getRequestContext();
+
+      expect(context.userAgent).toBe('Mozilla/5.0 Test');
+    });
+
+    test('returns ipAddress from x-forwarded-for header', async () => {
+      mockHeaderStore.get.mockImplementation((name: string) => {
+        if (name === 'x-forwarded-for') return '192.168.1.100';
+        return null;
+      });
+
+      const context = await getRequestContext();
+
+      expect(context.ipAddress).toBe('192.168.1.100');
+    });
+
+    test('extracts first IP from x-forwarded-for with multiple IPs', async () => {
+      mockHeaderStore.get.mockImplementation((name: string) => {
+        if (name === 'x-forwarded-for')
+          return '10.0.0.1, 192.168.1.1, 172.16.0.1';
+        return null;
+      });
+
+      const context = await getRequestContext();
+
+      expect(context.ipAddress).toBe('10.0.0.1');
+    });
+
+    test('falls back to x-real-ip when x-forwarded-for is not present', async () => {
+      mockHeaderStore.get.mockImplementation((name: string) => {
+        if (name === 'x-real-ip') return '10.20.30.40';
+        return null;
+      });
+
+      const context = await getRequestContext();
+
+      expect(context.ipAddress).toBe('10.20.30.40');
+    });
+
+    test('returns undefined for missing headers', async () => {
+      mockHeaderStore.get.mockReturnValue(null);
+
+      const context = await getRequestContext();
+
+      expect(context.userAgent).toBeUndefined();
+      expect(context.ipAddress).toBeUndefined();
     });
   });
 });

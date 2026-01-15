@@ -4,7 +4,11 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { hashPassword, verifyPassword } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createSession, destroySession } from '@/lib/session';
+import {
+  createSession,
+  destroySession,
+  getRequestContext,
+} from '@/lib/session';
 
 const registerSchema = z.object({
   tenantName: z.string().min(1, 'Tenant name is required'),
@@ -79,7 +83,8 @@ export async function register(
   });
 
   const user = tenant.users[0];
-  await createSession(user.id, tenant.id);
+  const requestContext = await getRequestContext();
+  await createSession(user.id, tenant.id, requestContext);
 
   redirect('/todos');
 }
@@ -144,7 +149,8 @@ export async function login(
     };
   }
 
-  await createSession(user.id, user.tenantId);
+  const requestContext = await getRequestContext();
+  await createSession(user.id, user.tenantId, requestContext);
 
   redirect('/todos');
 }

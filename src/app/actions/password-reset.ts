@@ -6,7 +6,7 @@ import { hashPassword } from '@/lib/auth';
 import { sendEmail } from '@/lib/email/send';
 import { PasswordResetEmail } from '@/lib/email/templates/password-reset';
 import { prisma } from '@/lib/prisma';
-import { createSession } from '@/lib/session';
+import { createSession, getRequestContext } from '@/lib/session';
 
 const TOKEN_EXPIRY_HOURS = 1;
 
@@ -133,7 +133,12 @@ export async function resetPassword(
   ]);
 
   // Create new session for the user
-  await createSession(resetToken.userId, resetToken.user.tenantId);
+  const requestContext = await getRequestContext();
+  await createSession(
+    resetToken.userId,
+    resetToken.user.tenantId,
+    requestContext,
+  );
 
   redirect('/todos');
 }

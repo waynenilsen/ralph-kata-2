@@ -5,8 +5,12 @@ import { prisma } from '@/lib/prisma';
 const mockCreateSession = mock(() =>
   Promise.resolve({ id: 'session-1', userId: 'user-1', tenantId: 'tenant-1' }),
 );
+const mockGetRequestContext = mock(() =>
+  Promise.resolve({ userAgent: undefined, ipAddress: undefined }),
+);
 mock.module('@/lib/session', () => ({
   createSession: mockCreateSession,
+  getRequestContext: mockGetRequestContext,
 }));
 
 // Mock nodemailer for email tests
@@ -321,7 +325,14 @@ describe('resetPassword', () => {
     }
 
     expect(mockCreateSession).toHaveBeenCalledTimes(1);
-    expect(mockCreateSession).toHaveBeenCalledWith(testUserId, testTenantId);
+    expect(mockCreateSession).toHaveBeenCalledWith(
+      testUserId,
+      testTenantId,
+      expect.objectContaining({
+        userAgent: undefined,
+        ipAddress: undefined,
+      }),
+    );
   });
 
   test('returns error for invalid token', async () => {

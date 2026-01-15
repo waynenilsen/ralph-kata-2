@@ -1,19 +1,45 @@
 import type { Session } from '@prisma/client';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { prisma } from './prisma';
 
 const SESSION_COOKIE_NAME = 'session';
 const SESSION_EXPIRY_DAYS = 7;
+const LAST_ACTIVE_DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Options for creating a session with request context.
+ */
+export interface CreateSessionOptions {
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+/**
+ * Extracts session metadata from request headers.
+ * @returns Object with userAgent and ipAddress from current request
+ */
+export async function getRequestContext(): Promise<CreateSessionOptions> {
+  const headerStore = await headers();
+  const userAgent = headerStore.get('user-agent') ?? undefined;
+  // x-forwarded-for is common for proxied requests, fallback to x-real-ip
+  const ipAddress =
+    headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    headerStore.get('x-real-ip') ??
+    undefined;
+  return { userAgent, ipAddress };
+}
 
 /**
  * Creates a new session for a user.
  * @param userId - The user's ID
  * @param tenantId - The tenant's ID
+ * @param options - Optional request context (userAgent, ipAddress)
  * @returns The created session
  */
 export async function createSession(
   userId: string,
   tenantId: string,
+  options?: CreateSessionOptions,
 ): Promise<Session> {
   const expiresAt = new Date(
     Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
@@ -24,6 +50,8 @@ export async function createSession(
       userId,
       tenantId,
       expiresAt,
+      userAgent: options?.userAgent,
+      ipAddress: options?.ipAddress,
     },
   });
 
@@ -40,6 +68,7 @@ export async function createSession(
 
 /**
  * Gets the current session from the cookie.
+ * Updates lastActiveAt if more than 5 minutes have passed since the last update.
  * @returns The session data or null if not authenticated
  */
 export async function getSession(): Promise<{
@@ -59,6 +88,16 @@ export async function getSession(): Promise<{
 
   if (!session || session.expiresAt < new Date()) {
     return null;
+  }
+
+  // Update lastActiveAt with debounce (only if > 5 min old)
+  const now = new Date();
+  const timeSinceLastActive = now.getTime() - session.lastActiveAt.getTime();
+  if (timeSinceLastActive > LAST_ACTIVE_DEBOUNCE_MS) {
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { lastActiveAt: now },
+    });
   }
 
   return {

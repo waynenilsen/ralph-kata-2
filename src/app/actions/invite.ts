@@ -7,7 +7,7 @@ import { hashPassword } from '@/lib/auth';
 import { sendEmail } from '@/lib/email/send';
 import { InviteEmail } from '@/lib/email/templates/invite';
 import { prisma } from '@/lib/prisma';
-import { createSession, getSession } from '@/lib/session';
+import { createSession, getRequestContext, getSession } from '@/lib/session';
 
 const INVITE_EXPIRY_DAYS = 7;
 
@@ -196,7 +196,8 @@ export async function acceptInvite(
     return newUser;
   });
 
-  await createSession(user.id, user.tenantId);
+  const requestContext = await getRequestContext();
+  await createSession(user.id, user.tenantId, requestContext);
 
   redirect('/todos');
 }
