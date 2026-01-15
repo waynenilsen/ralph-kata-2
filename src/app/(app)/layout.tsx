@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { logout } from '@/app/actions/auth';
 import { getSession } from '@/lib/session';
+import { NotificationBellWrapper } from './notification-bell-wrapper';
 import { UserMenu } from './user-menu';
 
 export default async function AppLayout({
@@ -22,7 +23,10 @@ export default async function AppLayout({
           <Link href="/" className="font-semibold text-lg">
             TeamTodo
           </Link>
-          <UserMenu logoutAction={logout} />
+          <div className="flex items-center gap-2">
+            <NotificationBellWrapper />
+            <UserMenu logoutAction={logout} />
+          </div>
         </div>
       </header>
       <main>{children}</main>
