@@ -7,9 +7,10 @@ model User {
   tenantId            String
   todos               Todo[]               @relation("CreatedTodos")
   sessions            Session[]
-  passwordResetTokens PasswordResetToken[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  passwordResetTokens   PasswordResetToken[]
+  emailRemindersEnabled Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 
   @@index([tenantId])
 }

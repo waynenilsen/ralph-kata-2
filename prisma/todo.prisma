@@ -8,13 +8,17 @@ model Todo {
   tenantId    String
   createdBy   User       @relation("CreatedTodos", fields: [createdById], references: [id])
   createdById String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+  dueSoonReminderSentAt   DateTime?
+  overdueReminderSentAt   DateTime?
 
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, dueDate])
   @@index([tenantId, createdAt])
+  @@index([dueDate, status, dueSoonReminderSentAt])
+  @@index([dueDate, status, overdueReminderSentAt])
 }
 
 enum TodoStatus {
