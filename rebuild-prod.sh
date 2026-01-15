@@ -19,5 +19,12 @@ bun x prisma generate
 echo "Building for production..."
 bun run build
 
+# Copy static assets for standalone mode
+echo "Copying static assets to standalone..."
+cp -r .next/static .next/standalone/.next/
+if [ -d "public" ]; then
+    cp -r public .next/standalone/
+fi
+
 echo "Production build complete."
 echo "Run ./reboot-prod.sh to restart the service."

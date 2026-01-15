@@ -6,7 +6,7 @@ SERVICE_NAME="ralph-kata-2"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SERVICE_FILE="${SERVICE_DIR}/${SERVICE_NAME}.service"
 WORKING_DIR="$(cd "$(dirname "$0")" && pwd)"
-PORT=3000
+PORT=8080
 DB_PATH="${WORKING_DIR}/data/prod.db"
 
 # Detect node path
