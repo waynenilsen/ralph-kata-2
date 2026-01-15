@@ -3,6 +3,7 @@
 import { MessageSquare } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import { deleteTodo, toggleTodo } from '@/app/actions/todos';
+import { LabelBadge } from '@/components/label-badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,13 @@ type TodoCardProps = {
       content: string;
       createdAt: Date;
       author: { id: string; email: string };
+    }[];
+    labels: {
+      label: {
+        id: string;
+        name: string;
+        color: string;
+      };
     }[];
   };
   members: { id: string; email: string }[];
@@ -149,6 +157,22 @@ export function TodoCard({ todo, members }: TodoCardProps) {
           <p className="text-sm text-muted-foreground">
             Due: {new Date(todo.dueDate).toLocaleDateString()}
           </p>
+        )}
+        {todo.labels.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 mt-2">
+            {todo.labels.slice(0, 3).map(({ label }) => (
+              <LabelBadge
+                key={label.id}
+                name={label.name}
+                color={label.color}
+              />
+            ))}
+            {todo.labels.length > 3 && (
+              <span className="text-xs text-muted-foreground">
+                +{todo.labels.length - 3} more
+              </span>
+            )}
+          </div>
         )}
         {todo._count.comments > 0 && (
           <div className="flex items-center gap-1 text-muted-foreground text-xs mt-2">

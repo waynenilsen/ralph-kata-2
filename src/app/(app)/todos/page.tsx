@@ -56,6 +56,9 @@ export default async function TodosPage({ searchParams }: TodosPageProps) {
           },
           orderBy: { createdAt: 'asc' },
         },
+        labels: {
+          include: { label: true },
+        },
       },
     }),
     prisma.todo.count({ where }),

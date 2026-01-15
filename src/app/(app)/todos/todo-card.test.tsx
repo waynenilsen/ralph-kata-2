@@ -27,6 +27,7 @@ const baseTodo = {
   assignee: null,
   _count: { comments: 0 },
   comments: [],
+  labels: [],
 };
 
 const members = [{ id: '1', email: 'test@example.com' }];
@@ -44,8 +45,11 @@ describe('TodoCard', () => {
       const cardContentChildren = cardContent?.props?.children;
 
       // The comment count div should not be present when count is 0
-      // CardContent children: [description, assignee, dueDate, commentCount?]
-      const commentCountDiv = cardContentChildren?.[3]; // Fourth child would be comment count
+      // CardContent children: [description, assignee, dueDate, labels?, commentCount?]
+      // With empty labels and 0 comments, index 3 and 4 should be falsy
+      const labelsDiv = cardContentChildren?.[3];
+      const commentCountDiv = cardContentChildren?.[4];
+      expect(labelsDiv).toBeFalsy();
       expect(commentCountDiv).toBeFalsy();
     });
 
@@ -60,7 +64,8 @@ describe('TodoCard', () => {
       const cardContentChildren = cardContent?.props?.children;
 
       // The comment count div should be present when count > 0
-      const commentCountDiv = cardContentChildren?.[3]; // Fourth child is comment count
+      // CardContent children: [description, assignee, dueDate, labels?, commentCount?]
+      const commentCountDiv = cardContentChildren?.[4]; // Fifth child is comment count (labels at 3)
       expect(commentCountDiv).toBeTruthy();
 
       // Check the count value - div > [MessageSquare, span with count]
@@ -76,7 +81,7 @@ describe('TodoCard', () => {
 
       const cardContent = result?.props?.children?.[1];
       const cardContentChildren = cardContent?.props?.children;
-      const commentCountDiv = cardContentChildren?.[3];
+      const commentCountDiv = cardContentChildren?.[4];
 
       expect(commentCountDiv).toBeTruthy();
       const commentCountSpan = commentCountDiv?.props?.children?.[1];
@@ -91,7 +96,7 @@ describe('TodoCard', () => {
 
       const cardContent = result?.props?.children?.[1];
       const cardContentChildren = cardContent?.props?.children;
-      const commentCountDiv = cardContentChildren?.[3];
+      const commentCountDiv = cardContentChildren?.[4];
 
       // First child should be the MessageSquare icon
       const messageSquareIcon = commentCountDiv?.props?.children?.[0];
@@ -99,6 +104,118 @@ describe('TodoCard', () => {
       expect(
         messageSquareIcon?.type?.displayName || messageSquareIcon?.type?.name,
       ).toBe('MessageSquare');
+    });
+  });
+
+  describe('label display', () => {
+    test('does not show labels section when labels array is empty', () => {
+      const result = TodoCard({
+        todo: { ...baseTodo, labels: [] },
+        members,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      // labels section would be at index 3 (after description, assignee, dueDate)
+      const labelsDiv = cardContentChildren?.[3];
+      // When labels is empty, this should be the comment count (falsy if comments is 0)
+      expect(labelsDiv).toBeFalsy();
+    });
+
+    test('shows labels when labels array has items', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          labels: [
+            { label: { id: 'l1', name: 'Bug', color: '#ff0000' } },
+            { label: { id: 'l2', name: 'Feature', color: '#00ff00' } },
+          ],
+        },
+        members,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const labelsDiv = cardContentChildren?.[3];
+      expect(labelsDiv).toBeTruthy();
+      expect(labelsDiv?.props?.className).toContain('flex');
+    });
+
+    test('shows maximum 3 labels', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          labels: [
+            { label: { id: 'l1', name: 'Bug', color: '#ff0000' } },
+            { label: { id: 'l2', name: 'Feature', color: '#00ff00' } },
+            { label: { id: 'l3', name: 'Urgent', color: '#0000ff' } },
+            { label: { id: 'l4', name: 'Backend', color: '#ffff00' } },
+            { label: { id: 'l5', name: 'Frontend', color: '#ff00ff' } },
+          ],
+        },
+        members,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const labelsDiv = cardContentChildren?.[3];
+      const labelChildren = labelsDiv?.props?.children;
+
+      // First child is array of LabelBadge components (max 3)
+      const labelBadges = labelChildren?.[0];
+      expect(labelBadges).toHaveLength(3);
+
+      // Second child is the "+N more" span
+      const moreSpan = labelChildren?.[1];
+      expect(moreSpan).toBeTruthy();
+      expect(moreSpan?.props?.children).toEqual(['+', 2, ' more']);
+    });
+
+    test('does not show +N more when 3 or fewer labels', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          labels: [
+            { label: { id: 'l1', name: 'Bug', color: '#ff0000' } },
+            { label: { id: 'l2', name: 'Feature', color: '#00ff00' } },
+            { label: { id: 'l3', name: 'Urgent', color: '#0000ff' } },
+          ],
+        },
+        members,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const labelsDiv = cardContentChildren?.[3];
+      const labelChildren = labelsDiv?.props?.children;
+
+      // First child is array of LabelBadge components
+      const labelBadges = labelChildren?.[0];
+      expect(labelBadges).toHaveLength(3);
+
+      // Second child should be falsy (no "+N more")
+      const moreSpan = labelChildren?.[1];
+      expect(moreSpan).toBeFalsy();
+    });
+
+    test('renders LabelBadge with correct props', () => {
+      const result = TodoCard({
+        todo: {
+          ...baseTodo,
+          labels: [{ label: { id: 'l1', name: 'Bug', color: '#ff0000' } }],
+        },
+        members,
+      });
+
+      const cardContent = result?.props?.children?.[1];
+      const cardContentChildren = cardContent?.props?.children;
+      const labelsDiv = cardContentChildren?.[3];
+      const labelChildren = labelsDiv?.props?.children;
+      const labelBadges = labelChildren?.[0];
+      const firstBadge = labelBadges?.[0];
+
+      expect(firstBadge?.props?.name).toBe('Bug');
+      expect(firstBadge?.props?.color).toBe('#ff0000');
     });
   });
 
