@@ -1,0 +1,24 @@
+model TodoActivity {
+  id        String         @id @default(cuid())
+  todo      Todo           @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  todoId    String
+  actor     User           @relation(fields: [actorId], references: [id])
+  actorId   String
+  action    ActivityAction
+  field     String?
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime       @default(now())
+
+  @@index([todoId])
+  @@index([todoId, createdAt])
+}
+
+enum ActivityAction {
+  CREATED
+  STATUS_CHANGED
+  ASSIGNEE_CHANGED
+  DUE_DATE_CHANGED
+  LABELS_CHANGED
+  DESCRIPTION_CHANGED
+}

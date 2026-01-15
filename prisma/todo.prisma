@@ -19,6 +19,7 @@ model Todo {
   subtasks                Subtask[]
   notifications           Notification[]
   recurrenceType          RecurrenceType @default(NONE)
+  activities              TodoActivity[]
 
   @@index([tenantId])
   @@index([tenantId, status])
