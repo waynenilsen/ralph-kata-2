@@ -26,6 +26,7 @@ const baseTodo = {
   assigneeId: null,
   assignee: null,
   _count: { comments: 0 },
+  comments: [],
 };
 
 const members = [{ id: '1', email: 'test@example.com' }];

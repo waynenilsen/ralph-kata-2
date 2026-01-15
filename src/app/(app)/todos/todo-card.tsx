@@ -29,6 +29,12 @@ type TodoCardProps = {
     assigneeId: string | null;
     assignee: { email: string } | null;
     _count: { comments: number };
+    comments: {
+      id: string;
+      content: string;
+      createdAt: Date;
+      author: { id: string; email: string };
+    }[];
   };
   members: { id: string; email: string }[];
 };
