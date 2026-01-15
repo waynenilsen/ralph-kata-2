@@ -132,20 +132,20 @@ test.describe('Todo Subtasks', () => {
     // Click on subtask title to enter edit mode
     await page.getByText('Original title').click();
 
-    // Should now see an input (the edit mode shows an input)
-    // The subtask edit input is in a row with check and X buttons
-    const subtaskEditRow = page.locator('.flex.items-center.gap-2').filter({
-      has: page.locator('input'),
-    });
-    const editInput = subtaskEditRow.locator('input').first();
-    await expect(editInput).toBeVisible();
+    // Should now see an input (the edit mode shows a focused textbox with the original title)
+    // The subtask edit input is next to the subtask heading and is the one without "Add subtask" placeholder
+    // It will be the focused element since we just clicked on it
+    const subtaskInput = page.locator('input:focus');
+    await expect(subtaskInput).toBeVisible();
+    // Verify it has the expected value
+    await expect(subtaskInput).toHaveValue('Original title');
 
     // Clear and type new title
-    await editInput.fill('Updated title');
+    await subtaskInput.fill('Updated title');
     await takeScreenshot(page, 'subtasks', 'edit-subtask', '02-editing');
 
     // Press Enter to save
-    await editInput.press('Enter');
+    await subtaskInput.press('Enter');
 
     // Verify the title is updated
     await expect(page.getByText('Updated title')).toBeVisible();

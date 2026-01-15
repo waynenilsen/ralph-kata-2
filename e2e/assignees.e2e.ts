@@ -70,7 +70,7 @@ test.describe('Todo Assignees', () => {
 
     // Open assignee dropdown in create form and select current user
     const createForm = page.locator('form').filter({ hasText: 'Create Todo' });
-    await createForm.getByRole('combobox').click();
+    await createForm.getByRole('combobox', { name: /assignee/i }).click();
     await page.getByRole('option', { name: uniqueEmail }).click();
 
     await page.getByRole('button', { name: /create todo/i }).click();
@@ -104,7 +104,7 @@ test.describe('Todo Assignees', () => {
     // Create assigned todo
     await page.getByLabel(/title/i).fill('Assigned Todo');
     const createForm = page.locator('form').filter({ hasText: 'Create Todo' });
-    await createForm.getByRole('combobox').click();
+    await createForm.getByRole('combobox', { name: /assignee/i }).click();
     await page.getByRole('option', { name: uniqueEmail }).click();
     await page.getByRole('button', { name: /create todo/i }).click();
 
@@ -171,7 +171,7 @@ test.describe('Todo Assignees', () => {
     // Create assigned todo
     await page.getByLabel(/title/i).fill('Todo with Assignee');
     const createForm = page.locator('form').filter({ hasText: 'Create Todo' });
-    await createForm.getByRole('combobox').click();
+    await createForm.getByRole('combobox', { name: /assignee/i }).click();
     await page.getByRole('option', { name: uniqueEmail }).click();
     await page.getByRole('button', { name: /create todo/i }).click();
 

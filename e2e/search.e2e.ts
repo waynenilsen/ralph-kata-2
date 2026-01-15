@@ -363,7 +363,7 @@ test.describe('Todo Search', () => {
       .filter({ has: adminPage.getByRole('button', { name: /save/i }) });
 
     // Click the assignee combobox
-    await editCard.getByRole('combobox').click();
+    await editCard.getByRole('combobox', { name: /assignee/i }).click();
     // Select the member
     await adminPage.getByRole('option', { name: memberEmail }).click();
     // Save to persist the assignment
