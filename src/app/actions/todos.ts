@@ -297,6 +297,20 @@ export async function updateTodo(
     }
   }
 
+  // Fetch current todo to check previous assignee for notification
+  const currentTodo = await prisma.todo.findFirst({
+    where: { id, tenantId: session.tenantId },
+    select: { assigneeId: true, title: true },
+  });
+
+  if (!currentTodo) {
+    return {
+      errors: {
+        _form: ['Todo not found or you do not have permission to update it'],
+      },
+    };
+  }
+
   // Use updateMany with tenantId filter to prevent IDOR attacks
   const updateResult = await prisma.todo.updateMany({
     where: {
@@ -317,6 +331,26 @@ export async function updateTodo(
         _form: ['Todo not found or you do not have permission to update it'],
       },
     };
+  }
+
+  // REQ-003: Create notification if assigning to someone else (not self-assignment)
+  // and the assignee is different from the previous assignee
+  if (
+    assigneeId &&
+    assigneeId !== session.userId &&
+    assigneeId !== currentTodo.assigneeId
+  ) {
+    const assigner = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { email: true },
+    });
+
+    await createNotification({
+      userId: assigneeId,
+      type: 'TODO_ASSIGNED',
+      message: `${assigner?.email ?? 'Someone'} assigned you to "${title}"`,
+      todoId: id,
+    });
   }
 
   revalidatePath('/todos');
