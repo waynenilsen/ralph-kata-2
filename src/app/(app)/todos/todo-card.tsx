@@ -26,6 +26,7 @@ type TodoCardProps = {
     status: string;
     dueDate: Date | null;
     assigneeId: string | null;
+    assignee: { email: string } | null;
   };
   members: { id: string; email: string }[];
 };
@@ -133,6 +134,9 @@ export function TodoCard({ todo, members }: TodoCardProps) {
             {todo.description}
           </p>
         )}
+        <p className="text-sm text-muted-foreground">
+          {todo.assignee ? `Assigned to: ${todo.assignee.email}` : 'Unassigned'}
+        </p>
         {todo.dueDate && (
           <p className="text-sm text-muted-foreground">
             Due: {new Date(todo.dueDate).toLocaleDateString()}
