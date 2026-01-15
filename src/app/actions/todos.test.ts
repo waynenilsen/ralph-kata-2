@@ -991,6 +991,133 @@ describe('updateTodoAssignee', () => {
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');
   });
+
+  test('creates notification when assigning to another user', async () => {
+    // Create another user in the same tenant
+    const assigneeId = `assignee-notify-${Date.now()}`;
+    const assigneeEmail = `assignee-notify-${Date.now()}@example.com`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: assigneeEmail,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    const result = await updateTodoAssignee(testTodoId, assigneeId);
+
+    expect(result.success).toBe(true);
+
+    // Verify notification was created
+    const notification = await prisma.notification.findFirst({
+      where: {
+        userId: assigneeId,
+        todoId: testTodoId,
+        type: 'TODO_ASSIGNED',
+      },
+    });
+
+    expect(notification).not.toBeNull();
+    expect(notification?.message).toContain('assigned you to');
+    expect(notification?.message).toContain('Todo for assignee test');
+    expect(notification?.isRead).toBe(false);
+
+    // Cleanup notification
+    await prisma.notification.deleteMany({ where: { userId: assigneeId } });
+  });
+
+  test('does not create notification for self-assignment', async () => {
+    // Assign the todo to the current user (self-assignment)
+    const result = await updateTodoAssignee(testTodoId, testUserId);
+
+    expect(result.success).toBe(true);
+
+    // Verify no notification was created
+    const notification = await prisma.notification.findFirst({
+      where: {
+        userId: testUserId,
+        todoId: testTodoId,
+        type: 'TODO_ASSIGNED',
+      },
+    });
+
+    expect(notification).toBeNull();
+  });
+
+  test('does not create notification when assignee unchanged', async () => {
+    // Create another user and assign them first
+    const assigneeId = `assignee-unchanged-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-unchanged-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    // First assignment - should create notification
+    await updateTodoAssignee(testTodoId, assigneeId);
+
+    // Count notifications
+    const countBefore = await prisma.notification.count({
+      where: { userId: assigneeId, todoId: testTodoId },
+    });
+
+    // Assign same user again - should not create another notification
+    const result = await updateTodoAssignee(testTodoId, assigneeId);
+
+    expect(result.success).toBe(true);
+
+    const countAfter = await prisma.notification.count({
+      where: { userId: assigneeId, todoId: testTodoId },
+    });
+
+    expect(countAfter).toBe(countBefore);
+
+    // Cleanup notification
+    await prisma.notification.deleteMany({ where: { userId: assigneeId } });
+  });
+
+  test('notification includes assigner email and todo title', async () => {
+    // Get the assigner's email
+    const assigner = await prisma.user.findUnique({
+      where: { id: testUserId },
+      select: { email: true },
+    });
+
+    // Create another user
+    const assigneeId = `assignee-message-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-message-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    await updateTodoAssignee(testTodoId, assigneeId);
+
+    const notification = await prisma.notification.findFirst({
+      where: {
+        userId: assigneeId,
+        todoId: testTodoId,
+        type: 'TODO_ASSIGNED',
+      },
+    });
+
+    expect(notification?.message).toBe(
+      `${assigner?.email} assigned you to "Todo for assignee test"`,
+    );
+
+    // Cleanup notification
+    await prisma.notification.deleteMany({ where: { userId: assigneeId } });
+  });
 });
 
 describe('updateTodoRecurrence', () => {

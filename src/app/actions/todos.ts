@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { generateNextRecurringTodo } from '@/lib/recurrence';
 import { getSession } from '@/lib/session';
+import { createNotification } from './notifications';
 
 const recurrenceTypeEnum = z.enum([
   'NONE',
@@ -330,6 +331,7 @@ export type UpdateTodoAssigneeResult = {
 
 /**
  * Updates the assignee of a todo for quick reassignment.
+ * Creates a notification when assigning to someone other than self.
  * @param todoId - The ID of the todo to update
  * @param assigneeId - The ID of the new assignee, or null to unassign
  * @returns The result of the update operation
@@ -358,6 +360,18 @@ export async function updateTodoAssignee(
     }
   }
 
+  // Fetch current todo to check previous assignee and get title for notification
+  const todo = await prisma.todo.findFirst({
+    where: { id: todoId, tenantId: session.tenantId },
+    select: { assigneeId: true, title: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to update it',
+    };
+  }
+
   // Use updateMany with tenantId filter to prevent IDOR attacks
   const updateResult = await prisma.todo.updateMany({
     where: {
@@ -373,6 +387,26 @@ export async function updateTodoAssignee(
     return {
       error: 'Todo not found or you do not have permission to update it',
     };
+  }
+
+  // Create notification if assigning to someone else (not self-assignment)
+  // and the assignee is different from the previous assignee
+  if (
+    assigneeId &&
+    assigneeId !== session.userId &&
+    assigneeId !== todo.assigneeId
+  ) {
+    const assigner = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { email: true },
+    });
+
+    await createNotification({
+      userId: assigneeId,
+      type: 'TODO_ASSIGNED',
+      message: `${assigner?.email ?? 'Someone'} assigned you to "${todo.title}"`,
+      todoId,
+    });
   }
 
   revalidatePath('/todos');
