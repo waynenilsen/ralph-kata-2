@@ -13,6 +13,7 @@ mock.module('@/app/actions/todos', () => ({
   toggleTodo: mock(() => Promise.resolve()),
   updateTodo: mock(() => Promise.resolve()),
   updateTodoRecurrence: mock(() => Promise.resolve()),
+  archiveTodo: mock(() => Promise.resolve()),
 }));
 
 // Import after mocking
@@ -572,6 +573,115 @@ describe('TodoCard', () => {
       expect(recurrenceIndicator?.props?.className).toContain(
         'text-muted-foreground',
       );
+    });
+  });
+
+  describe('archive dropdown menu item', () => {
+    test('renders dropdown menu with Archive option', () => {
+      const result = TodoCard({
+        todo: baseTodo,
+        members,
+        labels,
+      });
+
+      const cardHeader = result?.props?.children?.[0];
+      const headerContent = cardHeader?.props?.children?.props?.children;
+      const actionsSection = headerContent?.[1]; // Second child contains actions
+      const actionsChildren = actionsSection?.props?.children;
+
+      // Find the DropdownMenu component
+      const dropdownMenu = actionsChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { name?: string } })?.type?.name ===
+          'DropdownMenu',
+      );
+      expect(dropdownMenu).toBeTruthy();
+    });
+
+    test('dropdown menu contains DropdownMenuContent with Archive item', () => {
+      const result = TodoCard({
+        todo: baseTodo,
+        members,
+        labels,
+      });
+
+      const cardHeader = result?.props?.children?.[0];
+      const headerContent = cardHeader?.props?.children?.props?.children;
+      const actionsSection = headerContent?.[1];
+      const actionsChildren = actionsSection?.props?.children;
+
+      // Find the DropdownMenu component
+      const dropdownMenu = actionsChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { name?: string } })?.type?.name ===
+          'DropdownMenu',
+      );
+
+      // Navigate to dropdown children - [Trigger, Content]
+      const dropdownChildren = dropdownMenu?.props?.children;
+      expect(Array.isArray(dropdownChildren)).toBe(true);
+
+      // Find the DropdownMenuContent
+      const dropdownContent = dropdownChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { name?: string } })?.type?.name ===
+          'DropdownMenuContent',
+      );
+      expect(dropdownContent).toBeTruthy();
+
+      // DropdownMenuContent should have a DropdownMenuItem child
+      const menuItem = dropdownContent?.props?.children;
+      expect(menuItem).toBeTruthy();
+      expect(menuItem?.type?.name).toBe('DropdownMenuItem');
+
+      // Check that Archive text is in the children
+      const menuItemChildren = menuItem?.props?.children;
+      const hasArchiveText = menuItemChildren?.some(
+        (child: unknown) => child === 'Archive',
+      );
+      expect(hasArchiveText).toBe(true);
+    });
+
+    test('Archive option uses Archive icon from lucide-react', () => {
+      const result = TodoCard({
+        todo: baseTodo,
+        members,
+        labels,
+      });
+
+      const cardHeader = result?.props?.children?.[0];
+      const headerContent = cardHeader?.props?.children?.props?.children;
+      const actionsSection = headerContent?.[1];
+      const actionsChildren = actionsSection?.props?.children;
+
+      // Find the DropdownMenu component
+      const dropdownMenu = actionsChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { name?: string } })?.type?.name ===
+          'DropdownMenu',
+      );
+
+      // Navigate to dropdown children
+      const dropdownChildren = dropdownMenu?.props?.children;
+      const dropdownContent = dropdownChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { name?: string } })?.type?.name ===
+          'DropdownMenuContent',
+      );
+
+      // Get the DropdownMenuItem
+      const menuItem = dropdownContent?.props?.children;
+      const menuItemChildren = menuItem?.props?.children;
+
+      // Find the Archive icon (lucide exports it as Archive)
+      const archiveIcon = menuItemChildren?.find(
+        (child: unknown) =>
+          (child as { type?: { displayName?: string; name?: string } })?.type
+            ?.displayName === 'Archive' ||
+          (child as { type?: { displayName?: string; name?: string } })?.type
+            ?.name === 'Archive',
+      );
+      expect(archiveIcon).toBeTruthy();
     });
   });
 });

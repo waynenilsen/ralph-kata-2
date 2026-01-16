@@ -1,9 +1,15 @@
 'use client';
 
 import type { RecurrenceType } from '@prisma/client';
-import { CheckSquare, MessageSquare, Repeat } from 'lucide-react';
+import {
+  Archive,
+  CheckSquare,
+  MessageSquare,
+  MoreHorizontal,
+  Repeat,
+} from 'lucide-react';
 import { useState, useTransition } from 'react';
-import { deleteTodo, toggleTodo } from '@/app/actions/todos';
+import { archiveTodo, deleteTodo, toggleTodo } from '@/app/actions/todos';
 import { LabelBadge } from '@/components/label-badge';
 import {
   AlertDialog,
@@ -19,6 +25,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { EditTodoForm } from './edit-todo-form';
 
 const recurrenceLabels: Record<RecurrenceType, string> = {
@@ -81,6 +93,12 @@ export function TodoCard({ todo, members, labels }: TodoCardProps) {
     });
   };
 
+  const handleArchive = () => {
+    startTransition(async () => {
+      await archiveTodo(todo.id);
+    });
+  };
+
   if (isEditing) {
     return (
       <Card>
@@ -136,6 +154,19 @@ export function TodoCard({ todo, members, labels }: TodoCardProps) {
             >
               Edit
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isPending}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleArchive}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm" disabled={isPending}>
