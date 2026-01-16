@@ -10,6 +10,32 @@ export type LabelState = {
   error?: string;
 };
 
+export type Label = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+/**
+ * Retrieves all labels for the current user's tenant.
+ * Returns labels ordered by name ascending.
+ *
+ * @returns Array of labels or empty array if not authenticated
+ */
+export async function getLabels(): Promise<Label[]> {
+  const session = await getSession();
+
+  if (!session) {
+    return [];
+  }
+
+  return prisma.label.findMany({
+    where: { tenantId: session.tenantId },
+    select: { id: true, name: true, color: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
 /**
  * Creates a new label for the tenant.
  * Only ADMIN users can create labels.

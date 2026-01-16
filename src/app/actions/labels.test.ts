@@ -23,6 +23,7 @@ const {
   updateTodoLabels,
   addLabelToTodo,
   removeLabelFromTodo,
+  getLabels,
 } = await import('./labels');
 
 describe('createLabel', () => {
@@ -1288,5 +1289,123 @@ describe('removeLabelFromTodo', () => {
 
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
+  });
+});
+
+describe('getLabels', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let testUser: { id: string };
+  let label1: { id: string; name: string; color: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for getLabels' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for getLabels' },
+    });
+    testUser = await prisma.user.create({
+      data: {
+        email: `getlabels-user-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Alpha',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+    // Create second label for testing ordering
+    await prisma.label.create({
+      data: {
+        name: 'Beta',
+        color: '#22c55e',
+        tenantId: testTenant.id,
+      },
+    });
+    // Create label in other tenant to test isolation
+    await prisma.label.create({
+      data: {
+        name: 'Other Tenant Label',
+        color: '#3b82f6',
+        tenantId: otherTenant.id,
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns empty array when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await getLabels();
+
+    expect(result).toEqual([]);
+  });
+
+  test('returns labels for current tenant', async () => {
+    const result = await getLabels();
+
+    expect(result).toHaveLength(2);
+    expect(result[0].name).toBe('Alpha');
+    expect(result[1].name).toBe('Beta');
+  });
+
+  test('returns labels ordered by name ascending', async () => {
+    const result = await getLabels();
+
+    expect(result[0].name).toBe('Alpha');
+    expect(result[1].name).toBe('Beta');
+  });
+
+  test('returns only id, name, and color fields', async () => {
+    const result = await getLabels();
+
+    expect(result[0]).toEqual({
+      id: label1.id,
+      name: 'Alpha',
+      color: '#ef4444',
+    });
+  });
+
+  test('does not return labels from other tenants', async () => {
+    const result = await getLabels();
+
+    // Should only have 2 labels from testTenant
+    expect(result).toHaveLength(2);
+    expect(result.find((l) => l.name === 'Other Tenant Label')).toBeUndefined();
+  });
+
+  test('returns empty array when tenant has no labels', async () => {
+    // Delete all labels in test tenant
+    await prisma.label.deleteMany({
+      where: { tenantId: testTenant.id },
+    });
+
+    const result = await getLabels();
+
+    expect(result).toEqual([]);
   });
 });
