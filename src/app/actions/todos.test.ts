@@ -25,6 +25,7 @@ const {
   updateTodoRecurrence,
   archiveTodo,
   unarchiveTodo,
+  softDeleteTodo,
 } = await import('./todos');
 
 describe('createTodo', () => {
@@ -2451,6 +2452,162 @@ describe('unarchiveTodo', () => {
 
   test('returns error for non-existent todo', async () => {
     const result = await unarchiveTodo('non-existent-todo');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+  });
+});
+
+describe('softDeleteTodo', () => {
+  const testTenantId = `tenant-softdelete-${Date.now()}`;
+  const testUserId = `user-softdelete-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-softdelete-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to soft delete',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('soft deletes todo and sets deletedAt timestamp', async () => {
+    const beforeDelete = new Date();
+    const result = await softDeleteTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.deletedAt).not.toBeNull();
+    expect(todo?.deletedAt?.getTime()).toBeGreaterThanOrEqual(
+      beforeDelete.getTime(),
+    );
+  });
+
+  test('creates TRASHED activity when soft deleting', async () => {
+    const result = await softDeleteTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify TRASHED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'TRASHED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBeNull();
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await softDeleteTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+
+    // Verify todo was not soft deleted
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.deletedAt).toBeNull();
+  });
+
+  test('returns error when todo is already deleted', async () => {
+    // First soft delete the todo
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { deletedAt: new Date() },
+    });
+
+    const result = await softDeleteTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('already deleted');
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-softdelete-other-${Date.now()}`;
+    const otherUserId = `user-softdelete-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `softdelete-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to soft delete the other tenant's todo with our session
+    const result = await softDeleteTodo(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was not soft deleted
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo?.deletedAt).toBeNull();
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await softDeleteTodo('non-existent-todo');
 
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');

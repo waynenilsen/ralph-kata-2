@@ -654,6 +654,11 @@ export type UnarchiveTodoResult = {
   error?: string;
 };
 
+export type SoftDeleteTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
 /**
  * Unarchives a todo by clearing archivedAt (setting to null).
  * Creates an UNARCHIVED activity entry.
@@ -714,6 +719,67 @@ export async function unarchiveTodo(
     todoId,
     actorId: session.userId,
     action: 'UNARCHIVED',
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+/**
+ * Soft deletes a todo by setting deletedAt to current timestamp.
+ * Creates a TRASHED activity entry.
+ * @param todoId - The ID of the todo to soft delete
+ * @returns The result of the soft delete operation
+ */
+export async function softDeleteTodo(
+  todoId: string,
+): Promise<SoftDeleteTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to delete a todo',
+    };
+  }
+
+  // Get the todo to verify tenant and check deleted state
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { deletedAt: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to delete it',
+    };
+  }
+
+  if (todo.deletedAt) {
+    return {
+      error: 'Todo is already deleted',
+    };
+  }
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      deletedAt: new Date(),
+    },
+  });
+
+  // REQ-012: Create activity for soft delete action
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'TRASHED',
   });
 
   revalidatePath('/todos');
