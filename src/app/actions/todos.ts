@@ -813,6 +813,22 @@ export type GetArchivedTodosResult = {
   error?: string;
 };
 
+export type GetTrashedTodosResult = {
+  todos?: {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    dueDate: Date | null;
+    deletedAt: Date | null;
+    createdAt: Date;
+    assignee: { email: string } | null;
+    labels: { label: { id: string; name: string; color: string } }[];
+    _count: { comments: number };
+  }[];
+  error?: string;
+};
+
 /**
  * Restores a todo from trash by clearing deletedAt (setting to null).
  * Creates a RESTORED activity entry.
@@ -949,6 +965,41 @@ export async function getArchivedTodos(): Promise<GetArchivedTodosResult> {
     },
     orderBy: {
       archivedAt: 'desc',
+    },
+    include: {
+      assignee: { select: { email: true } },
+      labels: {
+        include: { label: true },
+      },
+      _count: { select: { comments: true } },
+    },
+  });
+
+  return { todos };
+}
+
+/**
+ * Retrieves trashed todos for the current user's tenant.
+ * Returns todos where deletedAt IS NOT NULL.
+ * Orders by deletedAt descending (most recently deleted first).
+ * @returns List of trashed todos with labels, assignee, and counts
+ */
+export async function getTrashedTodos(): Promise<GetTrashedTodosResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to view trashed todos',
+    };
+  }
+
+  const todos = await prisma.todo.findMany({
+    where: {
+      tenantId: session.tenantId,
+      deletedAt: { not: null },
+    },
+    orderBy: {
+      deletedAt: 'desc',
     },
     include: {
       assignee: { select: { email: true } },

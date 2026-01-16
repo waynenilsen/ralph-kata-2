@@ -3284,3 +3284,275 @@ describe('getArchivedTodos', () => {
     await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
   });
 });
+
+// Import getTrashedTodos after mocking
+const { getTrashedTodos } = await import('./todos');
+
+describe('getTrashedTodos', () => {
+  const testTenantId = `tenant-trashed-${Date.now()}`;
+  const testUserId = `user-trashed-${Date.now()}`;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant for Trashed',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-trashed-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoLabel.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.label.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await getTrashedTodos();
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+    expect(result.todos).toBeUndefined();
+  });
+
+  test('returns empty array when no trashed todos exist', async () => {
+    // Create a non-deleted todo
+    await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: null,
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.error).toBeUndefined();
+    expect(result.todos).toEqual([]);
+  });
+
+  test('returns only trashed todos (deletedAt not null)', async () => {
+    // Create various todos
+    const trashedTodo = await prisma.todo.create({
+      data: {
+        title: 'Trashed todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: null,
+      },
+    });
+
+    // Archived todo (should not appear in trash)
+    await prisma.todo.create({
+      data: {
+        title: 'Archived todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+        deletedAt: null,
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.error).toBeUndefined();
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].id).toBe(trashedTodo.id);
+    expect(result.todos?.[0].title).toBe('Trashed todo');
+  });
+
+  test('orders by deletedAt descending (most recently deleted first)', async () => {
+    const olderDate = new Date('2024-01-01');
+    const newerDate = new Date('2024-06-01');
+
+    await prisma.todo.create({
+      data: {
+        title: 'Older trashed',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: olderDate,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Newer trashed',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: newerDate,
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.todos).toHaveLength(2);
+    expect(result.todos?.[0].title).toBe('Newer trashed');
+    expect(result.todos?.[1].title).toBe('Older trashed');
+  });
+
+  test('includes assignee information', async () => {
+    const assigneeId = `assignee-trashed-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-trashed-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Trashed with assignee',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        assigneeId: assigneeId,
+        deletedAt: new Date(),
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].assignee).toBeDefined();
+    expect(result.todos?.[0].assignee?.email).toContain('assignee-trashed');
+  });
+
+  test('includes labels', async () => {
+    const label = await prisma.label.create({
+      data: {
+        name: 'Trashed Label',
+        color: '#ff0000',
+        tenantId: testTenantId,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Trashed with label',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+        labels: {
+          create: {
+            labelId: label.id,
+          },
+        },
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].labels).toHaveLength(1);
+    expect(result.todos?.[0].labels[0].label.name).toBe('Trashed Label');
+  });
+
+  test('includes comment count', async () => {
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Trashed with comments',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+        comments: {
+          create: [
+            { content: 'Comment 1', authorId: testUserId },
+            { content: 'Comment 2', authorId: testUserId },
+          ],
+        },
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0]._count.comments).toBe(2);
+
+    // Cleanup comments
+    await prisma.comment.deleteMany({ where: { todoId: todo.id } });
+  });
+
+  test('only returns todos from user tenant (tenant isolation)', async () => {
+    // Create another tenant with a trashed todo
+    const otherTenantId = `tenant-other-trashed-${Date.now()}`;
+    const otherUserId = `user-other-trashed-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `other-trashed-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create trashed todo in other tenant
+    await prisma.todo.create({
+      data: {
+        title: 'Other tenant trashed',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    // Create trashed todo in our tenant
+    const ourTodo = await prisma.todo.create({
+      data: {
+        title: 'Our tenant trashed',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    const result = await getTrashedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].id).toBe(ourTodo.id);
+    expect(result.todos?.[0].title).toBe('Our tenant trashed');
+
+    // Cleanup other tenant
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+});
