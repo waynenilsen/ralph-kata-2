@@ -26,6 +26,7 @@ const {
   archiveTodo,
   unarchiveTodo,
   softDeleteTodo,
+  restoreFromTrash,
 } = await import('./todos');
 
 describe('createTodo', () => {
@@ -2608,6 +2609,189 @@ describe('softDeleteTodo', () => {
 
   test('returns error for non-existent todo', async () => {
     const result = await softDeleteTodo('non-existent-todo');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+  });
+});
+
+describe('restoreFromTrash', () => {
+  const testTenantId = `tenant-restore-${Date.now()}`;
+  const testUserId = `user-restore-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-restore-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo that is in trash
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to restore',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('restores todo and clears deletedAt timestamp', async () => {
+    const result = await restoreFromTrash(testTodoId);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.deletedAt).toBeNull();
+  });
+
+  test('creates RESTORED activity when restoring from trash', async () => {
+    const result = await restoreFromTrash(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify RESTORED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'RESTORED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBeNull();
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await restoreFromTrash(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+
+    // Verify todo was not restored
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.deletedAt).not.toBeNull();
+  });
+
+  test('returns error when todo is not in trash', async () => {
+    // Create a non-deleted todo
+    const activeTodo = await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: null,
+      },
+    });
+
+    const result = await restoreFromTrash(activeTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not in trash');
+  });
+
+  test('restores to archive if was archived before deletion', async () => {
+    // Create an archived and deleted todo
+    const archivedDate = new Date('2024-01-01');
+    const archivedTodo = await prisma.todo.create({
+      data: {
+        title: 'Archived and deleted todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: archivedDate,
+        deletedAt: new Date(),
+      },
+    });
+
+    const result = await restoreFromTrash(archivedTodo.id);
+
+    expect(result.success).toBe(true);
+
+    const todo = await prisma.todo.findUnique({
+      where: { id: archivedTodo.id },
+    });
+    expect(todo?.deletedAt).toBeNull();
+    // archivedAt should remain as it was
+    expect(todo?.archivedAt?.toISOString()).toBe(archivedDate.toISOString());
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a deleted todo
+    const otherTenantId = `tenant-restore-other-${Date.now()}`;
+    const otherUserId = `user-restore-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `restore-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant deleted todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    // Try to restore the other tenant's todo with our session
+    const result = await restoreFromTrash(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was not restored
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo?.deletedAt).not.toBeNull();
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await restoreFromTrash('non-existent-todo');
 
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');

@@ -786,3 +786,70 @@ export async function softDeleteTodo(
 
   return { success: true };
 }
+
+export type RestoreFromTrashResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Restores a todo from trash by clearing deletedAt (setting to null).
+ * Creates a RESTORED activity entry.
+ * If the todo was archived before deletion, it returns to archive.
+ * @param todoId - The ID of the todo to restore from trash
+ * @returns The result of the restore operation
+ */
+export async function restoreFromTrash(
+  todoId: string,
+): Promise<RestoreFromTrashResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to restore a todo',
+    };
+  }
+
+  // Get the todo to verify tenant and check deleted state
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { deletedAt: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to restore it',
+    };
+  }
+
+  if (!todo.deletedAt) {
+    return {
+      error: 'Todo is not in trash',
+    };
+  }
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      deletedAt: null,
+    },
+  });
+
+  // REQ-012: Create activity for restore from trash action
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'RESTORED',
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
