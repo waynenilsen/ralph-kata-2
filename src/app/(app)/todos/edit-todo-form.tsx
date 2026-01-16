@@ -4,6 +4,7 @@ import type { RecurrenceType } from '@prisma/client';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { updateTodoLabels } from '@/app/actions/labels';
 import { type UpdateTodoState, updateTodo } from '@/app/actions/todos';
+import { ActivitySection } from '@/components/activity-section';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -216,6 +217,8 @@ export function EditTodoForm({
       </form>
 
       <SubtaskSection todoId={todo.id} subtasks={todo.subtasks} />
+
+      <ActivitySection todoId={todo.id} />
 
       <CommentSection todoId={todo.id} comments={todo.comments} />
     </>
