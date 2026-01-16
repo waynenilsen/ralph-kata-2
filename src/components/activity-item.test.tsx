@@ -119,6 +119,30 @@ describe('getActivityMessage', () => {
     expect(getActivityMessage(activity)).toBe('alice updated the description');
   });
 
+  test('returns correct message for ARCHIVED action', () => {
+    const activity = createActivity({ action: 'ARCHIVED' });
+    expect(getActivityMessage(activity)).toBe('alice archived this todo');
+  });
+
+  test('returns correct message for UNARCHIVED action', () => {
+    const activity = createActivity({ action: 'UNARCHIVED' });
+    expect(getActivityMessage(activity)).toBe(
+      'alice restored this todo from archive',
+    );
+  });
+
+  test('returns correct message for TRASHED action', () => {
+    const activity = createActivity({ action: 'TRASHED' });
+    expect(getActivityMessage(activity)).toBe('alice moved this todo to trash');
+  });
+
+  test('returns correct message for RESTORED action', () => {
+    const activity = createActivity({ action: 'RESTORED' });
+    expect(getActivityMessage(activity)).toBe(
+      'alice restored this todo from trash',
+    );
+  });
+
   test('uses username part of email for brevity', () => {
     const activity = createActivity({
       action: 'CREATED',

@@ -38,6 +38,14 @@ export function getActivityMessage(activity: Activity): string {
       return `${actor} changed labels`;
     case 'DESCRIPTION_CHANGED':
       return `${actor} updated the description`;
+    case 'ARCHIVED':
+      return `${actor} archived this todo`;
+    case 'UNARCHIVED':
+      return `${actor} restored this todo from archive`;
+    case 'TRASHED':
+      return `${actor} moved this todo to trash`;
+    case 'RESTORED':
+      return `${actor} restored this todo from trash`;
     default:
       return `${actor} made a change`;
   }
