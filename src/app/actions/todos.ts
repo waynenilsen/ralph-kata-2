@@ -797,6 +797,22 @@ export type PermanentDeleteTodoResult = {
   error?: string;
 };
 
+export type GetArchivedTodosResult = {
+  todos?: {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    dueDate: Date | null;
+    archivedAt: Date | null;
+    createdAt: Date;
+    assignee: { email: string } | null;
+    labels: { label: { id: string; name: string; color: string } }[];
+    _count: { comments: number };
+  }[];
+  error?: string;
+};
+
 /**
  * Restores a todo from trash by clearing deletedAt (setting to null).
  * Creates a RESTORED activity entry.
@@ -908,4 +924,40 @@ export async function permanentDeleteTodo(
   revalidatePath('/todos');
 
   return { success: true };
+}
+
+/**
+ * Retrieves archived todos for the current user's tenant.
+ * Returns todos where archivedAt IS NOT NULL AND deletedAt IS NULL.
+ * Orders by archivedAt descending (most recently archived first).
+ * @returns List of archived todos with labels, assignee, and counts
+ */
+export async function getArchivedTodos(): Promise<GetArchivedTodosResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to view archived todos',
+    };
+  }
+
+  const todos = await prisma.todo.findMany({
+    where: {
+      tenantId: session.tenantId,
+      archivedAt: { not: null },
+      deletedAt: null,
+    },
+    orderBy: {
+      archivedAt: 'desc',
+    },
+    include: {
+      assignee: { select: { email: true } },
+      labels: {
+        include: { label: true },
+      },
+      _count: { select: { comments: true } },
+    },
+  });
+
+  return { todos };
 }

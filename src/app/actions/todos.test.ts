@@ -3002,3 +3002,285 @@ describe('permanentDeleteTodo', () => {
     expect(remainingComments).toHaveLength(0);
   });
 });
+
+// Import getArchivedTodos after mocking
+const { getArchivedTodos } = await import('./todos');
+
+describe('getArchivedTodos', () => {
+  const testTenantId = `tenant-archived-${Date.now()}`;
+  const testUserId = `user-archived-${Date.now()}`;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant for Archived',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-archived-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoLabel.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.label.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await getArchivedTodos();
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+    expect(result.todos).toBeUndefined();
+  });
+
+  test('returns empty array when no archived todos exist', async () => {
+    // Create a non-archived todo
+    await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: null,
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.error).toBeUndefined();
+    expect(result.todos).toEqual([]);
+  });
+
+  test('returns only archived todos (archivedAt not null, deletedAt null)', async () => {
+    // Create various todos
+    const archivedTodo = await prisma.todo.create({
+      data: {
+        title: 'Archived todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: null,
+      },
+    });
+
+    // Archived AND deleted (should not appear)
+    await prisma.todo.create({
+      data: {
+        title: 'Archived and deleted todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+        deletedAt: new Date(),
+      },
+    });
+
+    // Only deleted (should not appear)
+    await prisma.todo.create({
+      data: {
+        title: 'Deleted todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.error).toBeUndefined();
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].id).toBe(archivedTodo.id);
+    expect(result.todos?.[0].title).toBe('Archived todo');
+  });
+
+  test('orders by archivedAt descending (most recently archived first)', async () => {
+    const olderDate = new Date('2024-01-01');
+    const newerDate = new Date('2024-06-01');
+
+    await prisma.todo.create({
+      data: {
+        title: 'Older archived',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: olderDate,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Newer archived',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: newerDate,
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.todos).toHaveLength(2);
+    expect(result.todos?.[0].title).toBe('Newer archived');
+    expect(result.todos?.[1].title).toBe('Older archived');
+  });
+
+  test('includes assignee information', async () => {
+    const assigneeId = `assignee-archived-${Date.now()}`;
+    await prisma.user.create({
+      data: {
+        id: assigneeId,
+        email: `assignee-archived-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        role: 'MEMBER',
+        tenantId: testTenantId,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Archived with assignee',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        assigneeId: assigneeId,
+        archivedAt: new Date(),
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].assignee).toBeDefined();
+    expect(result.todos?.[0].assignee?.email).toContain('assignee-archived');
+  });
+
+  test('includes labels', async () => {
+    const label = await prisma.label.create({
+      data: {
+        name: 'Archived Label',
+        color: '#ff0000',
+        tenantId: testTenantId,
+      },
+    });
+
+    await prisma.todo.create({
+      data: {
+        title: 'Archived with label',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+        labels: {
+          create: {
+            labelId: label.id,
+          },
+        },
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].labels).toHaveLength(1);
+    expect(result.todos?.[0].labels[0].label.name).toBe('Archived Label');
+  });
+
+  test('includes comment count', async () => {
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Archived with comments',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+        comments: {
+          create: [
+            { content: 'Comment 1', authorId: testUserId },
+            { content: 'Comment 2', authorId: testUserId },
+          ],
+        },
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0]._count.comments).toBe(2);
+
+    // Cleanup comments
+    await prisma.comment.deleteMany({ where: { todoId: todo.id } });
+  });
+
+  test('only returns todos from user tenant (tenant isolation)', async () => {
+    // Create another tenant with an archived todo
+    const otherTenantId = `tenant-other-archived-${Date.now()}`;
+    const otherUserId = `user-other-archived-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `other-archived-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create archived todo in other tenant
+    await prisma.todo.create({
+      data: {
+        title: 'Other tenant archived',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+        archivedAt: new Date(),
+      },
+    });
+
+    // Create archived todo in our tenant
+    const ourTodo = await prisma.todo.create({
+      data: {
+        title: 'Our tenant archived',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        archivedAt: new Date(),
+      },
+    });
+
+    const result = await getArchivedTodos();
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos?.[0].id).toBe(ourTodo.id);
+    expect(result.todos?.[0].title).toBe('Our tenant archived');
+
+    // Cleanup other tenant
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+});
