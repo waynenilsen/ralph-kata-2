@@ -1942,3 +1942,175 @@ describe('updateTodo due date activity generation', () => {
     expect(activity).toBeNull();
   });
 });
+
+describe('updateTodo description activity generation', () => {
+  const testTenantId = `tenant-desc-activity-${Date.now()}`;
+  const testUserId = `user-desc-activity-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-desc-activity-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo for description activity test',
+        description: 'Original description',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('creates DESCRIPTION_CHANGED activity when description changes', async () => {
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for description activity test');
+    formData.set('description', 'New description');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DESCRIPTION_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DESCRIPTION_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('description');
+    // REQ-005: No old/new values stored for description (privacy/storage reasons)
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('creates DESCRIPTION_CHANGED activity when setting description from null', async () => {
+    // Create a todo without description
+    const todoNoDesc = await prisma.todo.create({
+      data: {
+        title: 'Todo without description',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+
+    const formData = new FormData();
+    formData.set('id', todoNoDesc.id);
+    formData.set('title', 'Todo without description');
+    formData.set('description', 'New description added');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DESCRIPTION_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: todoNoDesc.id, action: 'DESCRIPTION_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('description');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('creates DESCRIPTION_CHANGED activity when clearing description to null', async () => {
+    // Todo already has a description from beforeEach
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for description activity test');
+    // No description field means it clears to undefined
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify DESCRIPTION_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DESCRIPTION_CHANGED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBe('description');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('does not create DESCRIPTION_CHANGED activity when description unchanged', async () => {
+    const formData = new FormData();
+    formData.set('id', testTodoId);
+    formData.set('title', 'Todo for description activity test');
+    formData.set('description', 'Original description'); // Same as beforeEach
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify no DESCRIPTION_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'DESCRIPTION_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+
+  test('does not create DESCRIPTION_CHANGED activity when both old and new are null/undefined', async () => {
+    // Create a todo without description
+    const todoNoDesc = await prisma.todo.create({
+      data: {
+        title: 'Todo no description',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+
+    // Update without providing description
+    const formData = new FormData();
+    formData.set('id', todoNoDesc.id);
+    formData.set('title', 'Updated title');
+
+    const result = await updateTodo({} as UpdateTodoState, formData);
+
+    expect(result.success).toBe(true);
+
+    // Verify no DESCRIPTION_CHANGED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: todoNoDesc.id, action: 'DESCRIPTION_CHANGED' },
+    });
+
+    expect(activity).toBeNull();
+  });
+});

@@ -315,10 +315,10 @@ export async function updateTodo(
     }
   }
 
-  // Fetch current todo to check previous assignee and due date for activity tracking
+  // Fetch current todo to check previous values for activity tracking
   const currentTodo = await prisma.todo.findFirst({
     where: { id, tenantId: session.tenantId },
-    select: { assigneeId: true, dueDate: true, title: true },
+    select: { assigneeId: true, dueDate: true, title: true, description: true },
   });
 
   if (!currentTodo) {
@@ -376,6 +376,19 @@ export async function updateTodo(
       field: 'dueDate',
       oldValue: oldDueDateIso,
       newValue: newDueDateIso,
+    });
+  }
+
+  // REQ-004: Create activity for description change (only if actually changed)
+  // REQ-005: Do not store old/new values for privacy/storage reasons
+  const oldDescription = currentTodo.description ?? null;
+  const newDescription = description ?? null;
+  if (oldDescription !== newDescription) {
+    await createTodoActivity({
+      todoId: id,
+      actorId: session.userId,
+      action: 'DESCRIPTION_CHANGED',
+      field: 'description',
     });
   }
 
