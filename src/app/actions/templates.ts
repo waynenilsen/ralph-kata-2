@@ -247,6 +247,54 @@ export async function updateTemplate(
 }
 
 /**
+ * Retrieves a single template by ID for the current user's tenant.
+ * Returns the template with subtasks (ordered by order), labels with details,
+ * counts, and createdBy user info.
+ *
+ * @param templateId - The ID of the template to retrieve
+ * @returns Object containing template or null with error
+ */
+export async function getTemplate(templateId: string) {
+  const session = await getSession();
+
+  if (!session) {
+    return { template: null, error: 'Not authenticated' };
+  }
+
+  const template = await prisma.todoTemplate.findUnique({
+    where: { id: templateId },
+    include: {
+      subtasks: {
+        orderBy: { order: 'asc' },
+      },
+      labels: {
+        include: {
+          label: true,
+        },
+      },
+      createdBy: {
+        select: {
+          id: true,
+          email: true,
+        },
+      },
+      _count: {
+        select: {
+          subtasks: true,
+          labels: true,
+        },
+      },
+    },
+  });
+
+  if (!template || template.tenantId !== session.tenantId) {
+    return { template: null, error: 'Template not found' };
+  }
+
+  return { template };
+}
+
+/**
  * Deletes a template and its associated subtasks and labels.
  * Validates: template belongs to user's tenant.
  * Cascade delete handles subtasks and labels via Prisma schema.

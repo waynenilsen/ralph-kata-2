@@ -15,8 +15,13 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTemplate, updateTemplate, deleteTemplate, getTemplates } =
-  await import('./templates');
+const {
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  getTemplates,
+  getTemplate,
+} = await import('./templates');
 
 describe('createTemplate', () => {
   let testTenant: { id: string };
@@ -1430,5 +1435,281 @@ describe('deleteTemplate', () => {
       where: { id: emptyTemplate.id },
     });
     expect(template).toBeNull();
+  });
+});
+
+describe('getTemplate', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let memberUser: { id: string };
+  let otherTenantUser: { id: string };
+  let label1: { id: string };
+  let label2: { id: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for Get Template' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for Get Template' },
+    });
+    memberUser = await prisma.user.create({
+      data: {
+        email: `get-single-template-member-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    otherTenantUser = await prisma.user.create({
+      data: {
+        email: `get-single-template-other-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: otherTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Bug',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+    label2 = await prisma.label.create({
+      data: {
+        name: 'Feature',
+        color: '#22c55e',
+        tenantId: testTenant.id,
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: memberUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.templateLabel.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.templateSubtask.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.todoTemplate.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns null with error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await getTemplate('some-template-id');
+
+    expect(result.template).toBeNull();
+    expect(result.error).toBe('Not authenticated');
+  });
+
+  test('returns null with error when template not found', async () => {
+    const result = await getTemplate('nonexistent-template');
+
+    expect(result.template).toBeNull();
+    expect(result.error).toBe('Template not found');
+  });
+
+  test('returns null with error when template belongs to different tenant', async () => {
+    const otherTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Other Tenant Template',
+        tenantId: otherTenant.id,
+        createdById: otherTenantUser.id,
+      },
+    });
+
+    const result = await getTemplate(otherTemplate.id);
+
+    expect(result.template).toBeNull();
+    expect(result.error).toBe('Template not found');
+  });
+
+  test('returns template by ID', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'My Template',
+        description: 'Test description',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template).not.toBeNull();
+    expect(result.template?.id).toBe(createdTemplate.id);
+    expect(result.template?.name).toBe('My Template');
+    expect(result.template?.description).toBe('Test description');
+  });
+
+  test('includes subtasks ordered by order', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Template with Subtasks',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [
+            { title: 'Subtask 3', order: 2 },
+            { title: 'Subtask 1', order: 0 },
+            { title: 'Subtask 2', order: 1 },
+          ],
+        },
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?.subtasks).toHaveLength(3);
+    expect(result.template?.subtasks[0].title).toBe('Subtask 1');
+    expect(result.template?.subtasks[0].order).toBe(0);
+    expect(result.template?.subtasks[1].title).toBe('Subtask 2');
+    expect(result.template?.subtasks[1].order).toBe(1);
+    expect(result.template?.subtasks[2].title).toBe('Subtask 3');
+    expect(result.template?.subtasks[2].order).toBe(2);
+  });
+
+  test('includes labels with label details', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Template with Labels',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        labels: {
+          create: [{ labelId: label1.id }, { labelId: label2.id }],
+        },
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?.labels).toHaveLength(2);
+    const labelNames = result.template?.labels.map(
+      (l: { label: { name: string } }) => l.label.name,
+    );
+    expect(labelNames).toContain('Bug');
+    expect(labelNames).toContain('Feature');
+    const bugLabel = result.template?.labels.find(
+      (l: { label: { name: string } }) => l.label.name === 'Bug',
+    );
+    expect(bugLabel?.label.color).toBe('#ef4444');
+  });
+
+  test('includes counts for subtasks and labels', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Template with Counts',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [
+            { title: 'Subtask 1', order: 0 },
+            { title: 'Subtask 2', order: 1 },
+          ],
+        },
+        labels: {
+          create: [{ labelId: label1.id }],
+        },
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?._count.subtasks).toBe(2);
+    expect(result.template?._count.labels).toBe(1);
+  });
+
+  test('includes createdBy user info', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Template with Creator',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?.createdBy).toBeDefined();
+    expect(result.template?.createdBy.id).toBe(memberUser.id);
+    expect(result.template?.createdBy.email).toContain(
+      'get-single-template-member',
+    );
+  });
+
+  test('returns template with all fields', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Complete Template',
+        description: 'A complete template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [{ title: 'Subtask 1', order: 0 }],
+        },
+        labels: {
+          create: [{ labelId: label1.id }],
+        },
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?.id).toBe(createdTemplate.id);
+    expect(result.template?.name).toBe('Complete Template');
+    expect(result.template?.description).toBe('A complete template');
+    expect(result.template?.createdAt).toBeDefined();
+    expect(result.template?.subtasks).toHaveLength(1);
+    expect(result.template?.labels).toHaveLength(1);
+    expect(result.template?._count).toBeDefined();
+    expect(result.template?.createdBy).toBeDefined();
+  });
+
+  test('returns template with empty subtasks and labels', async () => {
+    const createdTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Empty Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await getTemplate(createdTemplate.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.template?.subtasks).toEqual([]);
+    expect(result.template?.labels).toEqual([]);
+    expect(result.template?._count.subtasks).toBe(0);
+    expect(result.template?._count.labels).toBe(0);
   });
 });
