@@ -498,7 +498,7 @@ describe('sanitizeSearchQuery', () => {
   });
 
   test('truncates before sanitizing to handle edge cases', () => {
-    const longQuery = 'a'.repeat(100) + '*test';
+    const longQuery = `${'a'.repeat(100)}*test`;
     const result = sanitizeSearchQuery(longQuery);
     expect(result.length).toBeLessThanOrEqual(100);
     expect(result).not.toContain('*');

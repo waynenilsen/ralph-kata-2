@@ -4,6 +4,8 @@ model Todo {
   description String?
   status      TodoStatus @default(PENDING)
   dueDate     DateTime?
+  archivedAt  DateTime?
+  deletedAt   DateTime?
   tenant      Tenant     @relation(fields: [tenantId], references: [id])
   tenantId    String
   createdBy   User       @relation("CreatedTodos", fields: [createdById], references: [id])
@@ -26,6 +28,9 @@ model Todo {
   @@index([tenantId, dueDate])
   @@index([tenantId, createdAt])
   @@index([tenantId, assigneeId])
+  @@index([tenantId, archivedAt])
+  @@index([tenantId, deletedAt])
+  @@index([tenantId, archivedAt, deletedAt])
   @@index([dueDate, status, dueSoonReminderSentAt])
   @@index([dueDate, status, overdueReminderSentAt])
 }

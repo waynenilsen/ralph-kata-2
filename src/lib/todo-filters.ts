@@ -140,7 +140,7 @@ export async function searchTodoIds(
   }
 
   const matches = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM TodoSearchFts WHERE TodoSearchFts MATCH ${sanitized + '*'}
+    SELECT id FROM TodoSearchFts WHERE TodoSearchFts MATCH ${`${sanitized}*`}
   `;
 
   return matches.map((m) => m.id);
