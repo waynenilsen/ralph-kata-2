@@ -23,6 +23,7 @@ const {
   deleteTodo,
   updateTodoAssignee,
   updateTodoRecurrence,
+  archiveTodo,
 } = await import('./todos');
 
 describe('createTodo', () => {
@@ -2112,5 +2113,174 @@ describe('updateTodo description activity generation', () => {
     });
 
     expect(activity).toBeNull();
+  });
+});
+
+describe('archiveTodo', () => {
+  const testTenantId = `tenant-archive-${Date.now()}`;
+  const testUserId = `user-archive-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-archive-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to archive',
+        tenantId: testTenantId,
+        createdById: testUserId,
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('archives todo and sets archivedAt timestamp', async () => {
+    const beforeArchive = new Date();
+    const result = await archiveTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.archivedAt).not.toBeNull();
+    expect(todo?.archivedAt?.getTime()).toBeGreaterThanOrEqual(
+      beforeArchive.getTime(),
+    );
+  });
+
+  test('creates ARCHIVED activity when archiving', async () => {
+    const result = await archiveTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+
+    // Verify ARCHIVED activity was created
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodoId, action: 'ARCHIVED' },
+    });
+
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(testUserId);
+    expect(activity?.field).toBeNull();
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await archiveTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+
+    // Verify todo was not archived
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo?.archivedAt).toBeNull();
+  });
+
+  test('returns error when todo is already archived', async () => {
+    // First archive the todo
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { archivedAt: new Date() },
+    });
+
+    const result = await archiveTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('already archived');
+  });
+
+  test('returns error when todo is deleted', async () => {
+    // Mark the todo as deleted
+    await prisma.todo.update({
+      where: { id: testTodoId },
+      data: { deletedAt: new Date() },
+    });
+
+    const result = await archiveTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('deleted');
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a todo
+    const otherTenantId = `tenant-archive-other-${Date.now()}`;
+    const otherUserId = `user-archive-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `archive-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+      },
+    });
+
+    // Try to archive the other tenant's todo with our session
+    const result = await archiveTodo(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was not archived
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo?.archivedAt).toBeNull();
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await archiveTodo('non-existent-todo');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
   });
 });

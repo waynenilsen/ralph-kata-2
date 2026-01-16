@@ -522,6 +522,11 @@ export type UpdateTodoRecurrenceResult = {
   error?: string;
 };
 
+export type ArchiveTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
 /**
  * Updates the recurrence setting of a todo.
  * Validates that recurrence can only be set when a due date is present.
@@ -572,6 +577,71 @@ export async function updateTodoRecurrence(
     data: {
       recurrenceType,
     },
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+/**
+ * Archives a todo by setting archivedAt to current timestamp.
+ * Creates an ARCHIVED activity entry.
+ * @param todoId - The ID of the todo to archive
+ * @returns The result of the archive operation
+ */
+export async function archiveTodo(todoId: string): Promise<ArchiveTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to archive a todo',
+    };
+  }
+
+  // Get the todo to verify tenant, check archived/deleted state
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { archivedAt: true, deletedAt: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to archive it',
+    };
+  }
+
+  if (todo.deletedAt) {
+    return {
+      error: 'Cannot archive a deleted todo',
+    };
+  }
+
+  if (todo.archivedAt) {
+    return {
+      error: 'Todo is already archived',
+    };
+  }
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      archivedAt: new Date(),
+    },
+  });
+
+  // REQ-012: Create activity for archive action
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'ARCHIVED',
   });
 
   revalidatePath('/todos');
