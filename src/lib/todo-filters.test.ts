@@ -276,6 +276,28 @@ describe('buildPrismaQuery', () => {
     expect(result.where.tenantId).toBe(tenantId);
   });
 
+  test('always excludes archived todos (archivedAt: null)', () => {
+    const filters = {
+      status: 'all' as const,
+      sort: 'created-desc' as const,
+      page: 1,
+    };
+    const result = buildPrismaQuery(filters, tenantId);
+
+    expect(result.where.archivedAt).toBeNull();
+  });
+
+  test('always excludes deleted todos (deletedAt: null)', () => {
+    const filters = {
+      status: 'all' as const,
+      sort: 'created-desc' as const,
+      page: 1,
+    };
+    const result = buildPrismaQuery(filters, tenantId);
+
+    expect(result.where.deletedAt).toBeNull();
+  });
+
   test('does not filter by status when status is all', () => {
     const filters = {
       status: 'all' as const,

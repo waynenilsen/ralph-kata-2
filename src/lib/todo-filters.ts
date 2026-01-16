@@ -51,7 +51,12 @@ export function parseFilters(
 }
 
 export function buildPrismaQuery(filters: TodoFilters, tenantId: string) {
-  const where: { tenantId: string; status?: TodoStatus } = { tenantId };
+  const where: {
+    tenantId: string;
+    status?: TodoStatus;
+    archivedAt: null;
+    deletedAt: null;
+  } = { tenantId, archivedAt: null, deletedAt: null };
 
   if (filters.status === 'pending') {
     where.status = 'PENDING';
