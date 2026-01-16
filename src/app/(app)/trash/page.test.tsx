@@ -1,29 +1,25 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import * as todosModule from '@/app/actions/todos';
 
-const mockGetArchivedTodos = mock(() =>
+const mockGetTrashedTodos = mock(() =>
   Promise.resolve({ todos: [], error: undefined }),
 );
 
-// We need to mock getArchivedTodos for this test
-// But we must NOT spread or partially mock to avoid polluting other tests
-// The page only uses getArchivedTodos, so that's all we provide
-mock.module('@/app/actions/todos', () => {
-  // Return the actual module with just getArchivedTodos overridden
-  const actual = require('@/app/actions/todos');
-  return {
-    ...actual,
-    getArchivedTodos: mockGetArchivedTodos,
-  };
-});
+// We need to mock getTrashedTodos for this test
+// Spread the actual module and override only getTrashedTodos
+mock.module('@/app/actions/todos', () => ({
+  ...todosModule,
+  getTrashedTodos: mockGetTrashedTodos,
+}));
 
-const MockArchiveTodoList = ({ todos }: { todos: unknown[] }) => ({
-  type: 'ArchiveTodoList',
+const MockTrashTodoList = ({ todos }: { todos: unknown[] }) => ({
+  type: 'TrashTodoList',
   props: { todos },
 });
-MockArchiveTodoList.displayName = 'ArchiveTodoList';
+MockTrashTodoList.displayName = 'TrashTodoList';
 
-mock.module('@/components/archive-todo-list', () => ({
-  ArchiveTodoList: MockArchiveTodoList,
+mock.module('@/components/trash-todo-list', () => ({
+  TrashTodoList: MockTrashTodoList,
 }));
 
 const MockCard = ({ children }: { children: React.ReactNode }) => ({
@@ -50,43 +46,43 @@ mock.module('@/components/ui/card', () => ({
 }));
 
 // Import after mocking
-const { default: ArchivePage } = await import('./page');
+const { default: TrashPage } = await import('./page');
 
-const baseArchivedTodo = {
+const baseTrashedTodo = {
   id: '1',
-  title: 'Archived Todo',
+  title: 'Trashed Todo',
   description: 'Test description',
-  status: 'COMPLETED',
+  status: 'PENDING',
   dueDate: null,
-  archivedAt: new Date('2026-01-15T10:00:00Z'),
+  deletedAt: new Date('2026-01-15T10:00:00Z'),
   createdAt: new Date('2026-01-10T10:00:00Z'),
   assignee: null,
   labels: [],
   _count: { comments: 0 },
 };
 
-describe('ArchivePage', () => {
+describe('TrashPage', () => {
   beforeEach(() => {
-    mockGetArchivedTodos.mockClear();
-    mockGetArchivedTodos.mockImplementation(() =>
+    mockGetTrashedTodos.mockClear();
+    mockGetTrashedTodos.mockImplementation(() =>
       Promise.resolve({ todos: [], error: undefined }),
     );
   });
 
   describe('basic rendering', () => {
-    test('renders page with Archive heading', async () => {
-      const result = await ArchivePage();
+    test('renders page with Trash heading', async () => {
+      const result = await TrashPage();
 
       const heading = result?.props?.children?.find?.(
         (child: { type?: string }) => child?.type === 'h1',
       );
 
       expect(heading).toBeDefined();
-      expect(heading?.props?.children).toBe('Archive');
+      expect(heading?.props?.children).toBe('Trash');
     });
 
     test('renders container with correct classes', async () => {
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       expect(result?.props?.className).toContain('container');
       expect(result?.props?.className).toContain('mx-auto');
@@ -95,7 +91,7 @@ describe('ArchivePage', () => {
     });
 
     test('heading has correct styling classes', async () => {
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const heading = result?.props?.children?.find?.(
         (child: { type?: string }) => child?.type === 'h1',
@@ -108,52 +104,50 @@ describe('ArchivePage', () => {
   });
 
   describe('data fetching', () => {
-    test('calls getArchivedTodos on render', async () => {
-      await ArchivePage();
+    test('calls getTrashedTodos on render', async () => {
+      await TrashPage();
 
-      expect(mockGetArchivedTodos).toHaveBeenCalledTimes(1);
+      expect(mockGetTrashedTodos).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('empty state', () => {
-    test('displays empty state Card when no archived todos', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+    test('displays empty state Card when no trashed todos', async () => {
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({ todos: [], error: undefined }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
-      // Second child is the Card (after h1)
       const children = result?.props?.children;
       const cardElement = Array.isArray(children) ? children[1] : null;
 
-      // The Card mock contains CardContent as child - check displayName
       expect(cardElement?.props?.children?.type?.displayName).toBe(
         'CardContent',
       );
     });
 
-    test('empty state shows "No archived todos" message', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+    test('empty state shows "No trashed todos" message', async () => {
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({ todos: [], error: undefined }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
       const cardElement = Array.isArray(children) ? children[1] : null;
       const cardContent = cardElement?.props?.children;
       const paragraph = cardContent?.props?.children;
 
-      expect(paragraph?.props?.children).toBe('No archived todos');
+      expect(paragraph?.props?.children).toBe('No trashed todos');
     });
 
     test('empty state message has muted foreground styling', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({ todos: [], error: undefined }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
       const cardElement = Array.isArray(children) ? children[1] : null;
@@ -165,11 +159,11 @@ describe('ArchivePage', () => {
     });
 
     test('empty state CardContent has py-8 padding', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({ todos: [], error: undefined }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
       const cardElement = Array.isArray(children) ? children[1] : null;
@@ -179,76 +173,68 @@ describe('ArchivePage', () => {
     });
   });
 
-  describe('with archived todos', () => {
-    test('renders ArchiveTodoList when todos exist', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+  describe('with trashed todos', () => {
+    test('renders TrashTodoList when todos exist', async () => {
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
-          todos: [baseArchivedTodo],
+          todos: [baseTrashedTodo],
           error: undefined,
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
-      // Second child is the ArchiveTodoList (after h1)
       const children = result?.props?.children;
-      const archiveTodoListElement = Array.isArray(children)
-        ? children[1]
-        : null;
+      const trashTodoListElement = Array.isArray(children) ? children[1] : null;
 
-      // Check displayName on the type function
-      expect(archiveTodoListElement?.type?.displayName).toBe('ArchiveTodoList');
+      expect(trashTodoListElement?.type?.displayName).toBe('TrashTodoList');
     });
 
-    test('passes todos to ArchiveTodoList', async () => {
+    test('passes todos to TrashTodoList', async () => {
       const todos = [
-        { ...baseArchivedTodo, id: '1', title: 'Todo 1' },
-        { ...baseArchivedTodo, id: '2', title: 'Todo 2' },
+        { ...baseTrashedTodo, id: '1', title: 'Todo 1' },
+        { ...baseTrashedTodo, id: '2', title: 'Todo 2' },
       ];
 
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({ todos, error: undefined }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
-      const archiveTodoListElement = Array.isArray(children)
-        ? children[1]
-        : null;
+      const trashTodoListElement = Array.isArray(children) ? children[1] : null;
 
-      expect(archiveTodoListElement?.props?.todos).toEqual(todos);
+      expect(trashTodoListElement?.props?.todos).toEqual(todos);
     });
 
     test('does not render empty state Card when todos exist', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
-          todos: [baseArchivedTodo],
+          todos: [baseTrashedTodo],
           error: undefined,
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
-      // Second child should be ArchiveTodoList, not Card
       const children = result?.props?.children;
       const secondChild = Array.isArray(children) ? children[1] : null;
 
-      // Verify it's ArchiveTodoList and not a Card
-      expect(secondChild?.type?.displayName).toBe('ArchiveTodoList');
+      expect(secondChild?.type?.displayName).toBe('TrashTodoList');
     });
   });
 
   describe('error state', () => {
-    test('displays error message when getArchivedTodos returns error', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+    test('displays error message when getTrashedTodos returns error', async () => {
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
           todos: undefined,
-          error: 'You must be authenticated to view archived todos',
+          error: 'You must be authenticated to view trashed todos',
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
       const errorParagraph = Array.isArray(children)
@@ -261,19 +247,19 @@ describe('ArchivePage', () => {
 
       expect(errorParagraph).toBeDefined();
       expect(errorParagraph?.props?.children).toBe(
-        'You must be authenticated to view archived todos',
+        'You must be authenticated to view trashed todos',
       );
     });
 
     test('error message has destructive text styling', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
           todos: undefined,
           error: 'Some error',
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const children = result?.props?.children;
       const errorParagraph = Array.isArray(children)
@@ -287,41 +273,39 @@ describe('ArchivePage', () => {
       expect(errorParagraph?.props?.className).toContain('text-destructive');
     });
 
-    test('error state still shows Archive heading', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+    test('error state still shows Trash heading', async () => {
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
           todos: undefined,
           error: 'Some error',
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
       const heading = result?.props?.children?.find?.(
         (child: { type?: string }) => child?.type === 'h1',
       );
 
       expect(heading).toBeDefined();
-      expect(heading?.props?.children).toBe('Archive');
+      expect(heading?.props?.children).toBe('Trash');
     });
   });
 
   describe('undefined todos handling', () => {
     test('shows empty state when todos is undefined', async () => {
-      mockGetArchivedTodos.mockImplementation(() =>
+      mockGetTrashedTodos.mockImplementation(() =>
         Promise.resolve({
           todos: undefined,
           error: undefined,
         }),
       );
 
-      const result = await ArchivePage();
+      const result = await TrashPage();
 
-      // Second child should be the Card (empty state)
       const children = result?.props?.children;
       const cardElement = Array.isArray(children) ? children[1] : null;
 
-      // The Card mock contains CardContent as child - check displayName
       expect(cardElement?.props?.children?.type?.displayName).toBe(
         'CardContent',
       );

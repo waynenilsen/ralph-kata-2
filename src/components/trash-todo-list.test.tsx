@@ -1,18 +1,14 @@
 import { describe, expect, mock, test } from 'bun:test';
 import * as React from 'react';
 
+// Mock React hooks - useTransition callback is never called so server actions aren't executed
 mock.module('react', () => ({
   ...React,
   useState: (initial: unknown) => [initial, mock(() => {})],
-  useTransition: () => [false, (cb: () => void) => cb()],
+  useTransition: () => [false, mock(() => {})],
 }));
 
-mock.module('@/app/actions/todos', () => ({
-  restoreFromTrash: mock(() => Promise.resolve()),
-  permanentDeleteTodo: mock(() => Promise.resolve()),
-}));
-
-// Import after mocking
+// Import the component - the mocked useTransition prevents server action execution
 const { TrashTodoList } = await import('./trash-todo-list');
 
 const baseTrashedTodo = {

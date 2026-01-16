@@ -4,17 +4,21 @@ import * as React from 'react';
 mock.module('react', () => ({
   ...React,
   useState: (initial: unknown) => [initial, mock(() => {})],
-  useTransition: () => [false, (cb: () => void) => cb()],
+  useTransition: () => [false, mock(() => {})],
   useActionState: () => [{}, mock(() => {}), false],
 }));
 
-mock.module('@/app/actions/todos', () => ({
-  deleteTodo: mock(() => Promise.resolve()),
-  toggleTodo: mock(() => Promise.resolve()),
-  updateTodo: mock(() => Promise.resolve()),
-  updateTodoRecurrence: mock(() => Promise.resolve()),
-  archiveTodo: mock(() => Promise.resolve()),
-}));
+mock.module('@/app/actions/todos', () => {
+  const actual = require('@/app/actions/todos');
+  return {
+    ...actual,
+    deleteTodo: mock(() => Promise.resolve()),
+    toggleTodo: mock(() => Promise.resolve()),
+    updateTodo: mock(() => Promise.resolve()),
+    updateTodoRecurrence: mock(() => Promise.resolve()),
+    archiveTodo: mock(() => Promise.resolve()),
+  };
+});
 
 // Import after mocking
 const { TodoCard } = await import('./todo-card');

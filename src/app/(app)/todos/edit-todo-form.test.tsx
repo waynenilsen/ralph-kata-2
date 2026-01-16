@@ -9,7 +9,7 @@ let mockIsPending = false;
 mock.module('react', () => ({
   ...React,
   useActionState: () => [mockFormState, mock(() => {}), mockIsPending],
-  useTransition: () => [false, (callback: () => void) => callback()],
+  useTransition: () => [false, mock(() => {})],
   useState: (initial: unknown) => {
     // Return the initial value for all useState calls
     return [initial, () => {}];
@@ -22,10 +22,14 @@ mock.module('@/app/actions/labels', () => ({
   updateTodoLabels: mock(() => Promise.resolve({ success: true })),
 }));
 
-mock.module('@/app/actions/todos', () => ({
-  updateTodo: mock(() => Promise.resolve({ success: true })),
-  updateTodoRecurrence: mock(() => Promise.resolve({ success: true })),
-}));
+mock.module('@/app/actions/todos', () => {
+  const actual = require('@/app/actions/todos');
+  return {
+    ...actual,
+    updateTodo: mock(() => Promise.resolve({ success: true })),
+    updateTodoRecurrence: mock(() => Promise.resolve({ success: true })),
+  };
+});
 
 mock.module('@/app/actions/activities', () => ({
   getTodoActivities: mock(() => Promise.resolve({ activities: [] })),
