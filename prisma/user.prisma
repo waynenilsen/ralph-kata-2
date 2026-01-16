@@ -1,17 +1,18 @@
 model User {
-  id                  String               @id @default(cuid())
-  email               String               @unique
-  passwordHash        String
-  role                Role                 @default(MEMBER)
-  tenant              Tenant               @relation(fields: [tenantId], references: [id])
-  tenantId            String
-  todos               Todo[]               @relation("CreatedTodos")
-  assignedTodos       Todo[]               @relation("AssignedTodos")
-  sessions            Session[]
+  id                    String               @id @default(cuid())
+  email                 String               @unique
+  passwordHash          String
+  role                  Role                 @default(MEMBER)
+  tenant                Tenant               @relation(fields: [tenantId], references: [id])
+  tenantId              String
+  todos                 Todo[]               @relation("CreatedTodos")
+  assignedTodos         Todo[]               @relation("AssignedTodos")
+  sessions              Session[]
   passwordResetTokens   PasswordResetToken[]
   comments              Comment[]
   notifications         Notification[]
   todoActivities        TodoActivity[]
+  createdTemplates      TodoTemplate[]       @relation("CreatedTemplates")
   emailRemindersEnabled Boolean              @default(true)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt

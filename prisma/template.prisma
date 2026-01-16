@@ -1,0 +1,13 @@
+model TodoTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId    String
+  createdBy   User     @relation("CreatedTemplates", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
