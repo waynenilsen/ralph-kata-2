@@ -10,6 +10,7 @@ model TodoTemplate {
   updatedAt   DateTime @updatedAt
 
   subtasks TemplateSubtask[]
+  labels   TemplateLabel[]
 
   @@index([tenantId])
 }
@@ -22,4 +23,14 @@ model TemplateSubtask {
   templateId String
 
   @@index([templateId])
+}
+
+model TemplateLabel {
+  template   TodoTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  label      Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  labelId    String
+
+  @@id([templateId, labelId])
+  @@index([labelId])
 }

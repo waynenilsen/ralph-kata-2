@@ -1,11 +1,12 @@
 model Label {
-  id        String      @id @default(cuid())
-  name      String
-  color     String
-  tenant    Tenant      @relation(fields: [tenantId], references: [id])
-  tenantId  String
-  todos     TodoLabel[]
-  createdAt DateTime    @default(now())
+  id             String          @id @default(cuid())
+  name           String
+  color          String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  tenantId       String
+  todos          TodoLabel[]
+  templateLabels TemplateLabel[]
+  createdAt      DateTime        @default(now())
 
   @@unique([tenantId, name])
   @@index([tenantId])
