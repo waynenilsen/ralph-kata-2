@@ -101,3 +101,105 @@ export async function createTemplate(
   revalidatePath('/templates');
   return { success: true, templateId: template.id };
 }
+
+export type UpdateTemplateInput = {
+  id: string;
+  name: string;
+  description?: string;
+  labelIds: string[];
+  subtasks: { title: string }[];
+};
+
+/**
+ * Updates an existing template.
+ * Validates: template belongs to tenant, non-empty name, max 100 chars,
+ * max 2000 char description, max 20 subtasks, labels belong to tenant.
+ * Deletes existing subtasks/labels and recreates them (atomic transaction).
+ *
+ * @param input - The template data including id
+ * @returns The result of the update operation
+ */
+export async function updateTemplate(
+  input: UpdateTemplateInput,
+): Promise<TemplateActionState> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Verify template exists and belongs to user's tenant
+  const template = await prisma.todoTemplate.findUnique({
+    where: { id: input.id },
+    select: { tenantId: true },
+  });
+
+  if (!template || template.tenantId !== session.tenantId) {
+    return { error: 'Template not found' };
+  }
+
+  const name = input.name?.trim() || '';
+
+  if (!name) {
+    return { error: 'Template name is required' };
+  }
+
+  if (name.length > 100) {
+    return { error: 'Template name must be 100 characters or less' };
+  }
+
+  const description = input.description?.trim() || null;
+
+  if (input.description && input.description.length > 2000) {
+    return { error: 'Description must be 2000 characters or less' };
+  }
+
+  if (input.subtasks.length > 20) {
+    return { error: 'Maximum 20 subtasks per template' };
+  }
+
+  // Verify all labels belong to user's tenant
+  if (input.labelIds.length > 0) {
+    const validLabels = await prisma.label.count({
+      where: {
+        id: { in: input.labelIds },
+        tenantId: session.tenantId,
+      },
+    });
+
+    if (validLabels !== input.labelIds.length) {
+      return { error: 'Invalid label selection' };
+    }
+  }
+
+  // Delete existing subtasks and labels, then recreate (atomic transaction)
+  await prisma.$transaction([
+    prisma.templateSubtask.deleteMany({
+      where: { templateId: input.id },
+    }),
+    prisma.templateLabel.deleteMany({
+      where: { templateId: input.id },
+    }),
+    prisma.todoTemplate.update({
+      where: { id: input.id },
+      data: {
+        name,
+        description,
+        subtasks: {
+          create: input.subtasks.map((subtask, index) => ({
+            title: subtask.title.trim(),
+            order: index,
+          })),
+        },
+        labels: {
+          create: input.labelIds.map((labelId) => ({
+            labelId,
+          })),
+        },
+      },
+    }),
+  ]);
+
+  revalidatePath('/templates');
+  return { success: true };
+}
