@@ -1,3 +1,4 @@
+import { Archive, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { logout } from '@/app/actions/auth';
@@ -23,6 +24,22 @@ export default async function AppLayout({
           <Link href="/" className="font-semibold text-lg">
             TeamTodo
           </Link>
+          <nav className="flex items-center gap-4">
+            <Link
+              href="/archive"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Archive className="size-4" />
+              Archive
+            </Link>
+            <Link
+              href="/trash"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Trash2 className="size-4" />
+              Trash
+            </Link>
+          </nav>
           <div className="flex items-center gap-2">
             <NotificationBellWrapper />
             <UserMenu logoutAction={logout} />
