@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { createTodoActivity } from './activities';
 
 export type LabelState = {
   success?: boolean;
@@ -261,6 +262,159 @@ export async function updateTodoLabels(
       prisma.todoLabel.create({ data: { todoId, labelId } }),
     ),
   ]);
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+/**
+ * Adds a single label to a todo.
+ * Any tenant member can add labels to todos in their tenant.
+ * Creates a LABELS_CHANGED activity entry when the label is added.
+ *
+ * @param todoId - The ID of the todo to add the label to
+ * @param labelId - The ID of the label to add
+ * @returns The result of the add operation
+ */
+export async function addLabelToTodo(
+  todoId: string,
+  labelId: string,
+): Promise<LabelState> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Verify todo belongs to user's tenant
+  const todo = await prisma.todo.findUnique({
+    where: { id: todoId },
+    select: { tenantId: true },
+  });
+
+  if (!todo || todo.tenantId !== session.tenantId) {
+    return { error: 'Todo not found' };
+  }
+
+  // Verify label belongs to user's tenant
+  const label = await prisma.label.findUnique({
+    where: { id: labelId },
+    select: { tenantId: true, name: true },
+  });
+
+  if (!label || label.tenantId !== session.tenantId) {
+    return { error: 'Label not found' };
+  }
+
+  // Check if label is already attached to the todo
+  const existingTodoLabel = await prisma.todoLabel.findUnique({
+    where: {
+      todoId_labelId: {
+        todoId,
+        labelId,
+      },
+    },
+  });
+
+  if (existingTodoLabel) {
+    // Already attached, no-op
+    return { success: true };
+  }
+
+  // Add the label to the todo
+  await prisma.todoLabel.create({
+    data: { todoId, labelId },
+  });
+
+  // REQ-004: Create activity for label addition
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'LABELS_CHANGED',
+    field: 'labels',
+    oldValue: null,
+    newValue: label.name,
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+/**
+ * Removes a single label from a todo.
+ * Any tenant member can remove labels from todos in their tenant.
+ * Creates a LABELS_CHANGED activity entry when the label is removed.
+ *
+ * @param todoId - The ID of the todo to remove the label from
+ * @param labelId - The ID of the label to remove
+ * @returns The result of the remove operation
+ */
+export async function removeLabelFromTodo(
+  todoId: string,
+  labelId: string,
+): Promise<LabelState> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Verify todo belongs to user's tenant
+  const todo = await prisma.todo.findUnique({
+    where: { id: todoId },
+    select: { tenantId: true },
+  });
+
+  if (!todo || todo.tenantId !== session.tenantId) {
+    return { error: 'Todo not found' };
+  }
+
+  // Verify label belongs to user's tenant
+  const label = await prisma.label.findUnique({
+    where: { id: labelId },
+    select: { tenantId: true, name: true },
+  });
+
+  if (!label || label.tenantId !== session.tenantId) {
+    return { error: 'Label not found' };
+  }
+
+  // Check if label is attached to the todo
+  const existingTodoLabel = await prisma.todoLabel.findUnique({
+    where: {
+      todoId_labelId: {
+        todoId,
+        labelId,
+      },
+    },
+  });
+
+  if (!existingTodoLabel) {
+    // Not attached, no-op
+    return { success: true };
+  }
+
+  // Remove the label from the todo
+  await prisma.todoLabel.delete({
+    where: {
+      todoId_labelId: {
+        todoId,
+        labelId,
+      },
+    },
+  });
+
+  // REQ-004: Create activity for label removal
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'LABELS_CHANGED',
+    field: 'labels',
+    oldValue: label.name,
+    newValue: null,
+  });
 
   revalidatePath('/todos');
 

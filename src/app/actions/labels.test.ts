@@ -16,8 +16,14 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createLabel, updateLabel, deleteLabel, updateTodoLabels } =
-  await import('./labels');
+const {
+  createLabel,
+  updateLabel,
+  deleteLabel,
+  updateTodoLabels,
+  addLabelToTodo,
+  removeLabelFromTodo,
+} = await import('./labels');
 
 describe('createLabel', () => {
   let testTenant: { id: string };
@@ -822,5 +828,465 @@ describe('updateTodoLabels', () => {
     // Should only have one entry for label1
     expect(todoLabels).toHaveLength(1);
     expect(todoLabels[0].labelId).toBe(label1.id);
+  });
+});
+
+describe('addLabelToTodo', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let memberUser: { id: string };
+  let testTodo: { id: string };
+  let label1: { id: string; name: string };
+  let label2: { id: string; name: string };
+  let otherTenantLabel: { id: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for AddLabelToTodo' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for AddLabelToTodo' },
+    });
+    memberUser = await prisma.user.create({
+      data: {
+        email: `add-label-member-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    testTodo = await prisma.todo.create({
+      data: {
+        title: 'Test Todo',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Bug',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+    label2 = await prisma.label.create({
+      data: {
+        name: 'Feature',
+        color: '#22c55e',
+        tenantId: testTenant.id,
+      },
+    });
+    otherTenantLabel = await prisma.label.create({
+      data: {
+        name: 'Other Label',
+        color: '#3b82f6',
+        tenantId: otherTenant.id,
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: memberUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.todoLabel.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.todo.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await addLabelToTodo(testTodo.id, label1.id);
+
+    expect(result.error).toBe('Not authenticated');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when todo belongs to different tenant', async () => {
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other Todo',
+        tenantId: otherTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await addLabelToTodo(otherTodo.id, label1.id);
+
+    expect(result.error).toBe('Todo not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when todo does not exist', async () => {
+    const result = await addLabelToTodo('nonexistent-id', label1.id);
+
+    expect(result.error).toBe('Todo not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when label belongs to different tenant', async () => {
+    const result = await addLabelToTodo(testTodo.id, otherTenantLabel.id);
+
+    expect(result.error).toBe('Label not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when label does not exist', async () => {
+    const result = await addLabelToTodo(testTodo.id, 'nonexistent-label');
+
+    expect(result.error).toBe('Label not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('adds label to todo successfully', async () => {
+    const result = await addLabelToTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todoLabels = await prisma.todoLabel.findMany({
+      where: { todoId: testTodo.id },
+    });
+    expect(todoLabels).toHaveLength(1);
+    expect(todoLabels[0].labelId).toBe(label1.id);
+  });
+
+  test('creates LABELS_CHANGED activity with label name as newValue', async () => {
+    await addLabelToTodo(testTodo.id, label1.id);
+
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+    });
+
+    expect(activity).toBeDefined();
+    expect(activity?.action).toBe('LABELS_CHANGED');
+    expect(activity?.actorId).toBe(memberUser.id);
+    expect(activity?.field).toBe('labels');
+    expect(activity?.oldValue).toBeNull();
+    expect(activity?.newValue).toBe('Bug');
+  });
+
+  test('returns success without creating duplicate when label already on todo', async () => {
+    // Add label first time
+    await prisma.todoLabel.create({
+      data: { todoId: testTodo.id, labelId: label1.id },
+    });
+
+    // Try to add again
+    const result = await addLabelToTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+
+    // Should still have only one entry
+    const todoLabels = await prisma.todoLabel.findMany({
+      where: { todoId: testTodo.id },
+    });
+    expect(todoLabels).toHaveLength(1);
+  });
+
+  test('does not create activity when label already on todo', async () => {
+    // Add label first time
+    await prisma.todoLabel.create({
+      data: { todoId: testTodo.id, labelId: label1.id },
+    });
+
+    // Try to add again
+    await addLabelToTodo(testTodo.id, label1.id);
+
+    // Should have no activities (no duplicate add activity)
+    const activities = await prisma.todoActivity.findMany({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+    });
+    expect(activities).toHaveLength(0);
+  });
+
+  test('allows adding multiple labels to same todo', async () => {
+    await addLabelToTodo(testTodo.id, label1.id);
+    await addLabelToTodo(testTodo.id, label2.id);
+
+    const todoLabels = await prisma.todoLabel.findMany({
+      where: { todoId: testTodo.id },
+    });
+    expect(todoLabels).toHaveLength(2);
+    expect(todoLabels.map((tl) => tl.labelId).sort()).toEqual(
+      [label1.id, label2.id].sort(),
+    );
+  });
+
+  test('creates separate activity for each label added', async () => {
+    await addLabelToTodo(testTodo.id, label1.id);
+    await addLabelToTodo(testTodo.id, label2.id);
+
+    const activities = await prisma.todoActivity.findMany({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    expect(activities).toHaveLength(2);
+    expect(activities[0].newValue).toBe('Bug');
+    expect(activities[1].newValue).toBe('Feature');
+  });
+
+  test('allows any tenant member (not just admin) to add labels', async () => {
+    // memberUser has MEMBER role, not ADMIN
+    const result = await addLabelToTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+});
+
+describe('removeLabelFromTodo', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let memberUser: { id: string };
+  let testTodo: { id: string };
+  let label1: { id: string; name: string };
+  let label2: { id: string; name: string };
+  let otherTenantLabel: { id: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for RemoveLabelFromTodo' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for RemoveLabelFromTodo' },
+    });
+    memberUser = await prisma.user.create({
+      data: {
+        email: `remove-label-member-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    testTodo = await prisma.todo.create({
+      data: {
+        title: 'Test Todo',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Bug',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+    label2 = await prisma.label.create({
+      data: {
+        name: 'Feature',
+        color: '#22c55e',
+        tenantId: testTenant.id,
+      },
+    });
+    otherTenantLabel = await prisma.label.create({
+      data: {
+        name: 'Other Label',
+        color: '#3b82f6',
+        tenantId: otherTenant.id,
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: memberUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.todoLabel.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.todo.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await removeLabelFromTodo(testTodo.id, label1.id);
+
+    expect(result.error).toBe('Not authenticated');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when todo belongs to different tenant', async () => {
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other Todo',
+        tenantId: otherTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await removeLabelFromTodo(otherTodo.id, label1.id);
+
+    expect(result.error).toBe('Todo not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when todo does not exist', async () => {
+    const result = await removeLabelFromTodo('nonexistent-id', label1.id);
+
+    expect(result.error).toBe('Todo not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when label belongs to different tenant', async () => {
+    const result = await removeLabelFromTodo(testTodo.id, otherTenantLabel.id);
+
+    expect(result.error).toBe('Label not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when label does not exist', async () => {
+    const result = await removeLabelFromTodo(testTodo.id, 'nonexistent-label');
+
+    expect(result.error).toBe('Label not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('removes label from todo successfully', async () => {
+    // Add label first
+    await prisma.todoLabel.create({
+      data: { todoId: testTodo.id, labelId: label1.id },
+    });
+
+    const result = await removeLabelFromTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const todoLabels = await prisma.todoLabel.findMany({
+      where: { todoId: testTodo.id },
+    });
+    expect(todoLabels).toHaveLength(0);
+  });
+
+  test('creates LABELS_CHANGED activity with label name as oldValue', async () => {
+    // Add label first
+    await prisma.todoLabel.create({
+      data: { todoId: testTodo.id, labelId: label1.id },
+    });
+
+    await removeLabelFromTodo(testTodo.id, label1.id);
+
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+    });
+
+    expect(activity).toBeDefined();
+    expect(activity?.action).toBe('LABELS_CHANGED');
+    expect(activity?.actorId).toBe(memberUser.id);
+    expect(activity?.field).toBe('labels');
+    expect(activity?.oldValue).toBe('Bug');
+    expect(activity?.newValue).toBeNull();
+  });
+
+  test('returns success when label not on todo (no-op)', async () => {
+    // Label is not attached to todo
+    const result = await removeLabelFromTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+  });
+
+  test('does not create activity when label not on todo', async () => {
+    // Label is not attached to todo
+    await removeLabelFromTodo(testTodo.id, label1.id);
+
+    const activities = await prisma.todoActivity.findMany({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+    });
+    expect(activities).toHaveLength(0);
+  });
+
+  test('only removes specified label, leaves others intact', async () => {
+    // Add two labels
+    await prisma.todoLabel.createMany({
+      data: [
+        { todoId: testTodo.id, labelId: label1.id },
+        { todoId: testTodo.id, labelId: label2.id },
+      ],
+    });
+
+    await removeLabelFromTodo(testTodo.id, label1.id);
+
+    const todoLabels = await prisma.todoLabel.findMany({
+      where: { todoId: testTodo.id },
+    });
+    expect(todoLabels).toHaveLength(1);
+    expect(todoLabels[0].labelId).toBe(label2.id);
+  });
+
+  test('creates separate activity for each label removed', async () => {
+    // Add two labels
+    await prisma.todoLabel.createMany({
+      data: [
+        { todoId: testTodo.id, labelId: label1.id },
+        { todoId: testTodo.id, labelId: label2.id },
+      ],
+    });
+
+    await removeLabelFromTodo(testTodo.id, label1.id);
+    await removeLabelFromTodo(testTodo.id, label2.id);
+
+    const activities = await prisma.todoActivity.findMany({
+      where: { todoId: testTodo.id, action: 'LABELS_CHANGED' },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    expect(activities).toHaveLength(2);
+    expect(activities[0].oldValue).toBe('Bug');
+    expect(activities[1].oldValue).toBe('Feature');
+  });
+
+  test('allows any tenant member (not just admin) to remove labels', async () => {
+    // Add label first
+    await prisma.todoLabel.create({
+      data: { todoId: testTodo.id, labelId: label1.id },
+    });
+
+    // memberUser has MEMBER role, not ADMIN
+    const result = await removeLabelFromTodo(testTodo.id, label1.id);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
   });
 });
