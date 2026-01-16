@@ -10,6 +10,48 @@ export type TemplateActionState = {
   templateId?: string;
 };
 
+/**
+ * Retrieves all templates for the current user's tenant.
+ * Returns templates with subtasks (ordered by order), labels with details,
+ * counts, and createdBy user info. Ordered by name ascending.
+ *
+ * @returns Array of templates or empty array if not authenticated
+ */
+export async function getTemplates() {
+  const session = await getSession();
+
+  if (!session) {
+    return [];
+  }
+
+  return prisma.todoTemplate.findMany({
+    where: { tenantId: session.tenantId },
+    orderBy: { name: 'asc' },
+    include: {
+      subtasks: {
+        orderBy: { order: 'asc' },
+      },
+      labels: {
+        include: {
+          label: true,
+        },
+      },
+      createdBy: {
+        select: {
+          id: true,
+          email: true,
+        },
+      },
+      _count: {
+        select: {
+          subtasks: true,
+          labels: true,
+        },
+      },
+    },
+  });
+}
+
 export type CreateTemplateInput = {
   name: string;
   description?: string;
