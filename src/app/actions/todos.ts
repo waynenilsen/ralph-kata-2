@@ -792,6 +792,11 @@ export type RestoreFromTrashResult = {
   error?: string;
 };
 
+export type PermanentDeleteTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
 /**
  * Restores a todo from trash by clearing deletedAt (setting to null).
  * Creates a RESTORED activity entry.
@@ -847,6 +852,57 @@ export async function restoreFromTrash(
     todoId,
     actorId: session.userId,
     action: 'RESTORED',
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
+
+/**
+ * Permanently deletes a todo from the database.
+ * Only allows deletion of todos that are in trash (have deletedAt set).
+ * Cascades deletion to subtasks, comments, and activities.
+ * @param todoId - The ID of the todo to permanently delete
+ * @returns The result of the permanent delete operation
+ */
+export async function permanentDeleteTodo(
+  todoId: string,
+): Promise<PermanentDeleteTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to permanently delete a todo',
+    };
+  }
+
+  // Get the todo to verify tenant and check deleted state
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { deletedAt: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to delete it',
+    };
+  }
+
+  if (!todo.deletedAt) {
+    return {
+      error: 'Todo is not in trash',
+    };
+  }
+
+  // Use delete with tenantId check - Prisma cascades will handle subtasks, comments, activities
+  await prisma.todo.delete({
+    where: {
+      id: todoId,
+    },
   });
 
   revalidatePath('/todos');

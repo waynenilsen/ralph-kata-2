@@ -27,6 +27,7 @@ const {
   unarchiveTodo,
   softDeleteTodo,
   restoreFromTrash,
+  permanentDeleteTodo,
 } = await import('./todos');
 
 describe('createTodo', () => {
@@ -2795,5 +2796,209 @@ describe('restoreFromTrash', () => {
 
     expect(result.error).toBeDefined();
     expect(result.error).toContain('not found');
+  });
+});
+
+describe('permanentDeleteTodo', () => {
+  const testTenantId = `tenant-permdelete-${Date.now()}`;
+  const testUserId = `user-permdelete-${Date.now()}`;
+  let testTodoId: string;
+
+  beforeEach(async () => {
+    // Create test tenant and user
+    await prisma.tenant.create({
+      data: {
+        id: testTenantId,
+        name: 'Test Tenant',
+        users: {
+          create: {
+            id: testUserId,
+            email: `test-permdelete-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    // Create a test todo that is in trash
+    const todo = await prisma.todo.create({
+      data: {
+        title: 'Todo to permanently delete',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+      },
+    });
+    testTodoId = todo.id;
+
+    // Reset mock to return test session
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: testUserId, tenantId: testTenantId }),
+    );
+  });
+
+  afterEach(async () => {
+    // Clean up test data
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: testTenantId } },
+    });
+    await prisma.todo.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: testTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: testTenantId } });
+  });
+
+  test('permanently deletes todo from database', async () => {
+    const result = await permanentDeleteTodo(testTodoId);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    // Verify todo is completely gone from database
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo).toBeNull();
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await permanentDeleteTodo(testTodoId);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('authenticated');
+
+    // Verify todo was not deleted
+    const todo = await prisma.todo.findUnique({ where: { id: testTodoId } });
+    expect(todo).not.toBeNull();
+  });
+
+  test('returns error when todo is not in trash', async () => {
+    // Create a non-deleted todo
+    const activeTodo = await prisma.todo.create({
+      data: {
+        title: 'Active todo',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: null,
+      },
+    });
+
+    const result = await permanentDeleteTodo(activeTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not in trash');
+
+    // Verify todo was not deleted
+    const todo = await prisma.todo.findUnique({ where: { id: activeTodo.id } });
+    expect(todo).not.toBeNull();
+  });
+
+  test('returns error for todo from different tenant (IDOR prevention)', async () => {
+    // Create another tenant with a deleted todo
+    const otherTenantId = `tenant-permdelete-other-${Date.now()}`;
+    const otherUserId = `user-permdelete-other-${Date.now()}`;
+    await prisma.tenant.create({
+      data: {
+        id: otherTenantId,
+        name: 'Other Tenant',
+        users: {
+          create: {
+            id: otherUserId,
+            email: `permdelete-other-${Date.now()}@example.com`,
+            passwordHash: 'hashed',
+            role: 'ADMIN',
+          },
+        },
+      },
+    });
+
+    const otherTodo = await prisma.todo.create({
+      data: {
+        title: 'Other tenant deleted todo',
+        tenantId: otherTenantId,
+        createdById: otherUserId,
+        deletedAt: new Date(),
+      },
+    });
+
+    const result = await permanentDeleteTodo(otherTodo.id);
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+
+    // Verify the todo was not deleted
+    const todo = await prisma.todo.findUnique({ where: { id: otherTodo.id } });
+    expect(todo).not.toBeNull();
+
+    // Cleanup
+    await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
+    await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+
+  test('returns error for non-existent todo', async () => {
+    const result = await permanentDeleteTodo('non-existent-todo');
+
+    expect(result.error).toBeDefined();
+    expect(result.error).toContain('not found');
+  });
+
+  test('cascades delete to related subtasks', async () => {
+    // Create a todo with subtasks
+    const todoWithSubtasks = await prisma.todo.create({
+      data: {
+        title: 'Todo with subtasks',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+        subtasks: {
+          create: [{ title: 'Subtask 1' }, { title: 'Subtask 2' }],
+        },
+      },
+      include: { subtasks: true },
+    });
+
+    const subtaskIds = todoWithSubtasks.subtasks.map((s) => s.id);
+
+    const result = await permanentDeleteTodo(todoWithSubtasks.id);
+
+    expect(result.success).toBe(true);
+
+    // Verify subtasks are also deleted
+    const remainingSubtasks = await prisma.subtask.findMany({
+      where: { id: { in: subtaskIds } },
+    });
+    expect(remainingSubtasks).toHaveLength(0);
+  });
+
+  test('cascades delete to related comments', async () => {
+    // Create a todo with comments
+    const todoWithComments = await prisma.todo.create({
+      data: {
+        title: 'Todo with comments',
+        tenantId: testTenantId,
+        createdById: testUserId,
+        deletedAt: new Date(),
+        comments: {
+          create: [
+            { content: 'Comment 1', authorId: testUserId },
+            { content: 'Comment 2', authorId: testUserId },
+          ],
+        },
+      },
+      include: { comments: true },
+    });
+
+    const commentIds = todoWithComments.comments.map((c) => c.id);
+
+    const result = await permanentDeleteTodo(todoWithComments.id);
+
+    expect(result.success).toBe(true);
+
+    // Verify comments are also deleted
+    const remainingComments = await prisma.comment.findMany({
+      where: { id: { in: commentIds } },
+    });
+    expect(remainingComments).toHaveLength(0);
   });
 });
