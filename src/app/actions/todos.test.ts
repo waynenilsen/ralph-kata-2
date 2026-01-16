@@ -28,6 +28,7 @@ const {
   softDeleteTodo,
   restoreFromTrash,
   permanentDeleteTodo,
+  createTodoFromTemplate,
 } = await import('./todos');
 
 describe('createTodo', () => {
@@ -3554,5 +3555,439 @@ describe('getTrashedTodos', () => {
     await prisma.todo.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.user.deleteMany({ where: { tenantId: otherTenantId } });
     await prisma.tenant.deleteMany({ where: { id: otherTenantId } });
+  });
+});
+
+describe('createTodoFromTemplate', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let memberUser: { id: string };
+  let otherTenantUser: { id: string };
+  let label1: { id: string };
+  let label2: { id: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for CreateTodoFromTemplate' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for CreateTodoFromTemplate' },
+    });
+    memberUser = await prisma.user.create({
+      data: {
+        email: `todo-from-template-member-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    otherTenantUser = await prisma.user.create({
+      data: {
+        email: `todo-from-template-other-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: otherTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Bug',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+    label2 = await prisma.label.create({
+      data: {
+        name: 'Feature',
+        color: '#22c55e',
+        tenantId: testTenant.id,
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: memberUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.todoActivity.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.subtask.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.todoLabel.deleteMany({
+      where: { todo: { tenantId: { in: [testTenant.id, otherTenant.id] } } },
+    });
+    await prisma.todo.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.templateLabel.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.templateSubtask.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.todoTemplate.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await createTodoFromTemplate('some-template-id');
+
+    expect(result.error).toBe('Not authenticated');
+    expect(result.todo).toBeUndefined();
+  });
+
+  test('returns error when template not found', async () => {
+    const result = await createTodoFromTemplate('nonexistent-template');
+
+    expect(result.error).toBe('Template not found');
+    expect(result.todo).toBeUndefined();
+  });
+
+  test('returns error when template belongs to different tenant', async () => {
+    // Create a template in other tenant
+    const otherTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Other Tenant Template',
+        tenantId: otherTenant.id,
+        createdById: otherTenantUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(otherTemplate.id);
+
+    expect(result.error).toBe('Template not found');
+    expect(result.todo).toBeUndefined();
+  });
+
+  test('creates todo with template name as title', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Weekly Report',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo).toBeDefined();
+    expect(result.todo?.title).toBe('Weekly Report');
+  });
+
+  test('creates todo with template description', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Report Template',
+        description: 'A detailed description for the report',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.description).toBe(
+      'A detailed description for the report',
+    );
+  });
+
+  test('creates todo with null description when template has no description', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'No Description Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.description).toBeNull();
+  });
+
+  test('creates todo with status PENDING', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Pending Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.status).toBe('PENDING');
+  });
+
+  test('creates todo with correct tenantId from session', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Tenant Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({
+      where: { id: result.todo?.id },
+    });
+    expect(todo?.tenantId).toBe(testTenant.id);
+  });
+
+  test('creates todo with correct createdById from session', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Creator Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({
+      where: { id: result.todo?.id },
+    });
+    expect(todo?.createdById).toBe(memberUser.id);
+  });
+
+  test('copies template labels to todo', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Labels Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        labels: {
+          create: [{ labelId: label1.id }, { labelId: label2.id }],
+        },
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.labels).toHaveLength(2);
+    const labelIds = result.todo?.labels.map(
+      (l: { label: { id: string } }) => l.label.id,
+    );
+    expect(labelIds).toContain(label1.id);
+    expect(labelIds).toContain(label2.id);
+  });
+
+  test('copies template subtasks to todo', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Subtasks Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [
+            { title: 'Step 1', order: 0 },
+            { title: 'Step 2', order: 1 },
+            { title: 'Step 3', order: 2 },
+          ],
+        },
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.subtasks).toHaveLength(3);
+    expect(result.todo?.subtasks[0].title).toBe('Step 1');
+    expect(result.todo?.subtasks[0].order).toBe(0);
+    expect(result.todo?.subtasks[1].title).toBe('Step 2');
+    expect(result.todo?.subtasks[1].order).toBe(1);
+    expect(result.todo?.subtasks[2].title).toBe('Step 3');
+    expect(result.todo?.subtasks[2].order).toBe(2);
+  });
+
+  test('creates subtasks as incomplete', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Incomplete Subtasks Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [{ title: 'Subtask 1', order: 0 }],
+        },
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.subtasks[0].isComplete).toBe(false);
+  });
+
+  test('creates CREATED activity entry', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Activity Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+
+    const activity = await prisma.todoActivity.findFirst({
+      where: { todoId: result.todo?.id, action: 'CREATED' },
+    });
+    expect(activity).not.toBeNull();
+    expect(activity?.actorId).toBe(memberUser.id);
+  });
+
+  test('creates todo with labels and subtasks combined', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Full Template',
+        description: 'Complete template with all fields',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        labels: {
+          create: [{ labelId: label1.id }],
+        },
+        subtasks: {
+          create: [
+            { title: 'Task 1', order: 0 },
+            { title: 'Task 2', order: 1 },
+          ],
+        },
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.title).toBe('Full Template');
+    expect(result.todo?.description).toBe('Complete template with all fields');
+    expect(result.todo?.status).toBe('PENDING');
+    expect(result.todo?.labels).toHaveLength(1);
+    expect(result.todo?.subtasks).toHaveLength(2);
+  });
+
+  test('creates todo with no assignee', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'No Assignee Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.assignee).toBeNull();
+  });
+
+  test('creates todo with no due date', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'No Due Date Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+
+    const todo = await prisma.todo.findUnique({
+      where: { id: result.todo?.id },
+    });
+    expect(todo?.dueDate).toBeNull();
+  });
+
+  test('returns todo with all relations included', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'Relations Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        labels: {
+          create: [{ labelId: label1.id }],
+        },
+        subtasks: {
+          create: [{ title: 'Subtask 1', order: 0 }],
+        },
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.labels).toBeDefined();
+    expect(result.todo?.subtasks).toBeDefined();
+    expect(result.todo?.assignee).toBeDefined(); // Can be null
+    expect(result.todo?._count).toBeDefined();
+    expect(result.todo?._count?.subtasks).toBe(1);
+    expect(result.todo?._count?.comments).toBe(0);
+  });
+
+  test('creates todo with empty labels when template has no labels', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'No Labels Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.labels).toEqual([]);
+  });
+
+  test('creates todo with empty subtasks when template has no subtasks', async () => {
+    const template = await prisma.todoTemplate.create({
+      data: {
+        name: 'No Subtasks Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await createTodoFromTemplate(template.id);
+
+    expect(result.error).toBeUndefined();
+    expect(result.todo?.subtasks).toEqual([]);
   });
 });

@@ -1012,3 +1012,111 @@ export async function getTrashedTodos(): Promise<GetTrashedTodosResult> {
 
   return { todos };
 }
+
+export type CreateTodoFromTemplateResult = {
+  todo?: {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    assignee: { id: string; email: string } | null;
+    labels: { label: { id: string; name: string; color: string } }[];
+    subtasks: {
+      id: string;
+      title: string;
+      order: number;
+      isComplete: boolean;
+    }[];
+    _count: { subtasks: number; comments: number };
+  };
+  error?: string;
+};
+
+/**
+ * Creates a new todo from a template.
+ * Copies template name, description, labels, and subtasks to the new todo.
+ * Creates a CREATED activity entry.
+ * @param templateId - The ID of the template to create a todo from
+ * @returns The created todo with all relations, or error if not found
+ */
+export async function createTodoFromTemplate(
+  templateId: string,
+): Promise<CreateTodoFromTemplateResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Fetch the template with all relations, ensuring it belongs to the user's tenant
+  const template = await prisma.todoTemplate.findUnique({
+    where: { id: templateId },
+    include: {
+      subtasks: {
+        orderBy: { order: 'asc' },
+      },
+      labels: {
+        include: {
+          label: true,
+        },
+      },
+    },
+  });
+
+  if (!template || template.tenantId !== session.tenantId) {
+    return { error: 'Template not found' };
+  }
+
+  // Create the todo with all data from template
+  const todo = await prisma.todo.create({
+    data: {
+      title: template.name,
+      description: template.description,
+      tenantId: session.tenantId,
+      createdById: session.userId,
+      // Copy labels from template
+      labels:
+        template.labels.length > 0
+          ? {
+              create: template.labels.map((tl) => ({
+                labelId: tl.labelId,
+              })),
+            }
+          : undefined,
+      // Copy subtasks from template
+      subtasks:
+        template.subtasks.length > 0
+          ? {
+              create: template.subtasks.map((ts) => ({
+                title: ts.title,
+                order: ts.order,
+                isComplete: false,
+              })),
+            }
+          : undefined,
+    },
+    include: {
+      assignee: { select: { id: true, email: true } },
+      labels: {
+        include: { label: true },
+      },
+      subtasks: {
+        orderBy: { order: 'asc' },
+      },
+      _count: {
+        select: { subtasks: true, comments: true },
+      },
+    },
+  });
+
+  // REQ-003: Create activity for todo creation
+  await createTodoActivity({
+    todoId: todo.id,
+    actorId: session.userId,
+    action: 'CREATED',
+  });
+
+  revalidatePath('/todos');
+
+  return { todo };
+}
