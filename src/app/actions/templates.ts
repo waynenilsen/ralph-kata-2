@@ -203,3 +203,38 @@ export async function updateTemplate(
   revalidatePath('/templates');
   return { success: true };
 }
+
+/**
+ * Deletes a template and its associated subtasks and labels.
+ * Validates: template belongs to user's tenant.
+ * Cascade delete handles subtasks and labels via Prisma schema.
+ *
+ * @param templateId - The ID of the template to delete
+ * @returns The result of the delete operation
+ */
+export async function deleteTemplate(
+  templateId: string,
+): Promise<TemplateActionState> {
+  const session = await getSession();
+
+  if (!session) {
+    return { error: 'Not authenticated' };
+  }
+
+  // Verify template exists and belongs to user's tenant
+  const template = await prisma.todoTemplate.findUnique({
+    where: { id: templateId },
+    select: { tenantId: true },
+  });
+
+  if (!template || template.tenantId !== session.tenantId) {
+    return { error: 'Template not found' };
+  }
+
+  await prisma.todoTemplate.delete({
+    where: { id: templateId },
+  });
+
+  revalidatePath('/templates');
+  return { success: true };
+}

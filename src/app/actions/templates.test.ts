@@ -15,7 +15,9 @@ mock.module('@/lib/session', () => ({
 }));
 
 // Import after mocking
-const { createTemplate, updateTemplate } = await import('./templates');
+const { createTemplate, updateTemplate, deleteTemplate } = await import(
+  './templates'
+);
 
 describe('createTemplate', () => {
   let testTenant: { id: string };
@@ -929,5 +931,209 @@ describe('updateTemplate', () => {
       where: { id: existingTemplate.id },
     });
     expect(template?.description).toBeNull();
+  });
+});
+
+describe('deleteTemplate', () => {
+  let testTenant: { id: string };
+  let otherTenant: { id: string };
+  let memberUser: { id: string };
+  let otherTenantUser: { id: string };
+  let label1: { id: string };
+  let existingTemplate: { id: string };
+
+  beforeEach(async () => {
+    testTenant = await prisma.tenant.create({
+      data: { name: 'Test Tenant for Delete Templates' },
+    });
+    otherTenant = await prisma.tenant.create({
+      data: { name: 'Other Tenant for Delete Templates' },
+    });
+    memberUser = await prisma.user.create({
+      data: {
+        email: `delete-template-member-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: testTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    otherTenantUser = await prisma.user.create({
+      data: {
+        email: `delete-template-other-${Date.now()}@example.com`,
+        passwordHash: 'hashed',
+        tenantId: otherTenant.id,
+        role: 'MEMBER',
+      },
+    });
+    label1 = await prisma.label.create({
+      data: {
+        name: 'Bug',
+        color: '#ef4444',
+        tenantId: testTenant.id,
+      },
+    });
+
+    // Create an existing template for delete tests
+    existingTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Template to Delete',
+        description: 'This template will be deleted',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+        subtasks: {
+          create: [
+            { title: 'Subtask 1', order: 0 },
+            { title: 'Subtask 2', order: 1 },
+          ],
+        },
+        labels: {
+          create: [{ labelId: label1.id }],
+        },
+      },
+    });
+
+    mockGetSession.mockImplementation(() =>
+      Promise.resolve({ userId: memberUser.id, tenantId: testTenant.id }),
+    );
+  });
+
+  afterEach(async () => {
+    await prisma.templateLabel.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.templateSubtask.deleteMany({
+      where: {
+        template: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+      },
+    });
+    await prisma.todoTemplate.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.label.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.session.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.user.deleteMany({
+      where: { tenantId: { in: [testTenant.id, otherTenant.id] } },
+    });
+    await prisma.tenant.deleteMany({
+      where: { id: { in: [testTenant.id, otherTenant.id] } },
+    });
+  });
+
+  test('returns error when not authenticated', async () => {
+    mockGetSession.mockImplementation(() => Promise.resolve(null));
+
+    const result = await deleteTemplate(existingTemplate.id);
+
+    expect(result.error).toBe('Not authenticated');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when template not found', async () => {
+    const result = await deleteTemplate('nonexistent-template');
+
+    expect(result.error).toBe('Template not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('returns error when template belongs to different tenant', async () => {
+    // Create a template in other tenant
+    const otherTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Other Tenant Template',
+        tenantId: otherTenant.id,
+        createdById: otherTenantUser.id,
+      },
+    });
+
+    const result = await deleteTemplate(otherTemplate.id);
+
+    expect(result.error).toBe('Template not found');
+    expect(result.success).toBeUndefined();
+  });
+
+  test('deletes template successfully', async () => {
+    const result = await deleteTemplate(existingTemplate.id);
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    const template = await prisma.todoTemplate.findUnique({
+      where: { id: existingTemplate.id },
+    });
+    expect(template).toBeNull();
+  });
+
+  test('cascade deletes subtasks when template is deleted', async () => {
+    // Verify subtasks exist before delete
+    const subtasksBefore = await prisma.templateSubtask.findMany({
+      where: { templateId: existingTemplate.id },
+    });
+    expect(subtasksBefore).toHaveLength(2);
+
+    const result = await deleteTemplate(existingTemplate.id);
+
+    expect(result.success).toBe(true);
+
+    // Verify subtasks are deleted
+    const subtasksAfter = await prisma.templateSubtask.findMany({
+      where: { templateId: existingTemplate.id },
+    });
+    expect(subtasksAfter).toHaveLength(0);
+  });
+
+  test('cascade deletes template labels when template is deleted', async () => {
+    // Verify labels exist before delete
+    const labelsBefore = await prisma.templateLabel.findMany({
+      where: { templateId: existingTemplate.id },
+    });
+    expect(labelsBefore).toHaveLength(1);
+
+    const result = await deleteTemplate(existingTemplate.id);
+
+    expect(result.success).toBe(true);
+
+    // Verify template labels are deleted
+    const labelsAfter = await prisma.templateLabel.findMany({
+      where: { templateId: existingTemplate.id },
+    });
+    expect(labelsAfter).toHaveLength(0);
+  });
+
+  test('does not delete the actual labels (only junction table)', async () => {
+    const result = await deleteTemplate(existingTemplate.id);
+
+    expect(result.success).toBe(true);
+
+    // Verify the label still exists
+    const label = await prisma.label.findUnique({
+      where: { id: label1.id },
+    });
+    expect(label).not.toBeNull();
+    expect(label?.name).toBe('Bug');
+  });
+
+  test('deletes template with no subtasks or labels', async () => {
+    const emptyTemplate = await prisma.todoTemplate.create({
+      data: {
+        name: 'Empty Template',
+        tenantId: testTenant.id,
+        createdById: memberUser.id,
+      },
+    });
+
+    const result = await deleteTemplate(emptyTemplate.id);
+
+    expect(result.success).toBe(true);
+
+    const template = await prisma.todoTemplate.findUnique({
+      where: { id: emptyTemplate.id },
+    });
+    expect(template).toBeNull();
   });
 });
