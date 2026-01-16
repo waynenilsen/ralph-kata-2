@@ -648,3 +648,75 @@ export async function archiveTodo(todoId: string): Promise<ArchiveTodoResult> {
 
   return { success: true };
 }
+
+export type UnarchiveTodoResult = {
+  success?: boolean;
+  error?: string;
+};
+
+/**
+ * Unarchives a todo by clearing archivedAt (setting to null).
+ * Creates an UNARCHIVED activity entry.
+ * @param todoId - The ID of the todo to unarchive
+ * @returns The result of the unarchive operation
+ */
+export async function unarchiveTodo(
+  todoId: string,
+): Promise<UnarchiveTodoResult> {
+  const session = await getSession();
+
+  if (!session) {
+    return {
+      error: 'You must be authenticated to unarchive a todo',
+    };
+  }
+
+  // Get the todo to verify tenant, check archived/deleted state
+  const todo = await prisma.todo.findFirst({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    select: { archivedAt: true, deletedAt: true },
+  });
+
+  if (!todo) {
+    return {
+      error: 'Todo not found or you do not have permission to unarchive it',
+    };
+  }
+
+  if (todo.deletedAt) {
+    return {
+      error: 'Cannot unarchive a deleted todo',
+    };
+  }
+
+  if (!todo.archivedAt) {
+    return {
+      error: 'Todo is not archived',
+    };
+  }
+
+  // Use updateMany with tenantId filter to prevent IDOR attacks
+  await prisma.todo.updateMany({
+    where: {
+      id: todoId,
+      tenantId: session.tenantId,
+    },
+    data: {
+      archivedAt: null,
+    },
+  });
+
+  // REQ-012: Create activity for unarchive action
+  await createTodoActivity({
+    todoId,
+    actorId: session.userId,
+    action: 'UNARCHIVED',
+  });
+
+  revalidatePath('/todos');
+
+  return { success: true };
+}
